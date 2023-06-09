@@ -215,8 +215,15 @@ int main(int argc, char** argv)
 	
 
 	sf::Vector2f viewportCenter(512, 512);
-	constexpr float scrollSensitivity = 1.2f;
+
+	constexpr float scrollZoomSensitivity = 1.2f;
+	constexpr float keyZoomSensitivity = 1.05f;
+	constexpr float keyPanSensitivity = 15;
+
 	float zoomLevel = 1;
+
+	sf::Vector2f lastMousePos;
+	bool mouseDownLastFrame = false;
 
 	while (window.isOpen()) {
 		sf::Event event;
@@ -230,14 +237,33 @@ int main(int argc, char** argv)
 			
 			if (event.type == sf::Event::MouseWheelMoved)
 			{
-				zoomLevel *= event.mouseWheel.delta == 1 ? scrollSensitivity : 1 / scrollSensitivity;
+				zoomLevel *= event.mouseWheel.delta == 1 ? scrollZoomSensitivity : 1 / scrollZoomSensitivity;
 			}
 		}
 
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= 10 / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += 10 / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= 10 / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += 10 / zoomLevel;
+		float actualPanSensitivity = keyPanSensitivity;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) actualPanSensitivity *= 3;
+
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
+
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal)) zoomLevel *= keyZoomSensitivity;
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen)) zoomLevel /= keyZoomSensitivity;
+
+		if (sf::Mouse::isButtonPressed(sf::Mouse::Left) || sf::Mouse::isButtonPressed(sf::Mouse::Right))
+		{
+			sf::Vector2f newMousePos = sf::Vector2f(sf::Mouse::getPosition());
+			if (mouseDownLastFrame)
+			{
+				sf::Vector2f posDiff = newMousePos - lastMousePos;
+				viewportCenter -= posDiff / zoomLevel;
+			}
+			lastMousePos = newMousePos;
+			mouseDownLastFrame = true;
+		}
+		else mouseDownLastFrame = false;
 
 		window.clear(sf::Color::Black);
 
