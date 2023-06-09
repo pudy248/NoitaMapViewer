@@ -278,7 +278,7 @@ const MaterialColor allColors[] = {
 {"purifying_powder", 0xbdbcb2},
 {"radioactive_gas", 0x0ab48b},
 {"radioactive_gas_static", 0x0ab48b},
-{"radioactive_liquid", 0x09ccaa},
+{"radioactive_liquid", 0x08bb80},
 {"radioactive_liquid_fading", 0x14ffea},
 {"radioactive_liquid_yellow", 0x11ffcc},
 {"rainbow_gas", 0xe3e7f7},

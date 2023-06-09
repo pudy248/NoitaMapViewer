@@ -24,6 +24,7 @@
     <ProjectGuid>{5154fde8-1d6e-4dad-a6f2-4e85c037ec4a}</ProjectGuid>
     <RootNamespace>NoitaSettings</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>NoitaMapViewer</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
