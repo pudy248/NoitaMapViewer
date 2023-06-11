@@ -275,7 +275,7 @@ int main(int argc, char** argv)
 
 	sf::Vector2f viewportCenter(512, 512);
 
-	constexpr float scrollZoomSensitivity = 1.2f;
+	constexpr float scrollZoomSensitivity = 2.0f;
 	constexpr float keyZoomSensitivity = 1.05f;
 	constexpr float keyPanSensitivity = 15;
 
