@@ -243,6 +243,50 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	return { cx, cy, world_texture };
 }
 
+void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
+{
+	WIN32_FIND_DATA fd;
+
+	char buffer[_MAX_PATH];
+	int offset = 0;
+	_putstr_offset(save00_path, buffer, offset);
+	_putstr_offset("/world/world_*.png_petri", buffer, offset);
+	buffer[offset] = '\0';
+
+	WCHAR wSearchName[_MAX_PATH];
+	MultiByteToWideChar(CP_UTF8, 0, buffer, _MAX_PATH, wSearchName, _MAX_PATH);
+	HANDLE hFind = ::FindFirstFile(wSearchName, &fd);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			{
+				offset = 0;
+				char buffer2[_MAX_PATH];
+				WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, _MAX_PATH, buffer2, _MAX_PATH, NULL, NULL);
+
+				_putstr_offset(save00_path, buffer, offset);
+				_putstr_offset("/world/", buffer, offset);
+				_putstr_offset(buffer2, buffer, offset);
+				buffer[offset] = '\0';
+
+				int secondUnderscore = offset - 12;
+				for (;secondUnderscore >= 0; secondUnderscore--) if (buffer[secondUnderscore] == '_') break;
+				int firstUnderscore = secondUnderscore - 2;
+				for (;firstUnderscore >= 0; firstUnderscore--) if (buffer[firstUnderscore] == '_') break;
+				int px = atoi(buffer + firstUnderscore + 1);
+				int py = atoi(buffer + secondUnderscore + 1);
+				int cx = px / 512;
+				int cy = py / 512;
+
+				outVec.push_back(RenderChunk(save00_path, cx, cy));
+			}
+		} while (::FindNextFile(hFind, &fd));
+		::FindClose(hFind);
+	}
+}
+
 int main(int argc, char** argv)
 {
 	char save00_path[_MAX_PATH];
@@ -293,12 +337,8 @@ int main(int argc, char** argv)
 	handle_resize(initial_display_sz);
 
 	LoadMats("mats/");
-
 	std::vector<ChunkSprite> chunks;
-	for (int i = -36; i < 34; i++)
-		for (int j = -14; j < 35; j++)
-			chunks.push_back(RenderChunk(save00_path, i, j));
-	
+	IteratePngPetris(save00_path, chunks);
 
 	sf::Vector2f viewportCenter(512, 512);
 
