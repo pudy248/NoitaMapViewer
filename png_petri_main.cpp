@@ -65,12 +65,12 @@ int GetMaterialIndex(const char* color)
 {
 	for (int i = 0; i < numMats; i++)
 	{
-		if (strcmp(color, allMaterials[i].name) == 0)
+		if (allMaterials[i].name != NULL && strcmp(color, allMaterials[i].name) == 0)
 		{
 			return i;
 		}
 	}
-	printf("Missing color: %s!\n", color);
+	printf("ERR: Missing color for material: %s\n", color);
 	return 0;
 }
 
@@ -176,6 +176,16 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		current_object = image_data;
 	}
 
+	//auto unknown2_start = current_object;
+	//auto unknown2_count = read_be<std::uint32_t>(unknown2_start);
+
+	//std::cout << "Unhandled offset: " << current_object - data << '\n';
+	//std::cout << "Unhandled bytes: " << data_end - current_object << '\n';
+
+	/////////////////
+	// Write image //
+	/////////////////
+
 	uint32_t* RGBABuffer = (uint32_t*)malloc(4 * 512 * 512);
 	auto custom_color_it = custom_world_colors.begin();
 	for (int i = 0; i != 512 * 512; ++i)
@@ -211,8 +221,8 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 				float rotatedTexX = texX * cosf(physics_object.rot_radians) - texY * sinf(physics_object.rot_radians);
 				float rotatedTexY = texX * sinf(physics_object.rot_radians) + texY * cosf(physics_object.rot_radians);
 
-				int pixX = rotatedTexX + physics_object.x - 512 * cx;
-				int pixY = rotatedTexY + physics_object.y - 512 * cy;
+				int pixX = rintf(rotatedTexX) + rintf(physics_object.x) - 512 * cx;
+				int pixY = rintf(rotatedTexY) + rintf(physics_object.y) - 512 * cy;
 
 				if (pixX < 0 || pixX >= 512 || pixY < 0 || pixY >= 512) continue;
 
@@ -261,6 +271,12 @@ int main(int argc, char** argv)
 	}
 	save00ExistenceStream.close();
 
+
+	//char pathBuffer[200];
+	//sprintf_s(pathBuffer, "%s/world/area_0.bin", save00_path);
+	//for (int i = 0; i < read_compressed_file(pathBuffer).length(); i++) printf("%c", ((char*)read_compressed_file(pathBuffer).c_str())[i]);
+	//printf("\n");
+
 	sf::Vector2f initial_display_sz(950.f, 800.f);
 	sf::RenderWindow window(
 		sf::VideoMode(initial_display_sz.x, initial_display_sz.y),
@@ -277,6 +293,7 @@ int main(int argc, char** argv)
 	handle_resize(initial_display_sz);
 
 	LoadMats("mats/");
+
 	std::vector<ChunkSprite> chunks;
 	for (int i = -36; i < 34; i++)
 		for (int j = -14; j < 35; j++)
