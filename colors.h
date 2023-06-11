@@ -30,7 +30,7 @@ struct Material
 	uint32_t* tex;
 };
 
-constexpr int numMats = 443;
+constexpr int numMats = 444;
 Material allMaterials[numMats];
 
 Material LoadMaterial(const char* path, char* outputStr)
@@ -57,7 +57,14 @@ void LoadMats(const char* path)
 {
 	WIN32_FIND_DATA fd;
 
-	int counter = 0;
+	char* str = (char*)malloc(10);
+	strcpy_s(str, 10, "ERR_MAT");
+	uint32_t* emptyData = (uint32_t*)malloc(4 * 252 * 252);
+	memset(emptyData, 0, 4 * 252 * 252);
+	Material nullMat = { str, emptyData };
+
+	allMaterials[0] = nullMat;
+	int counter = 1;
 	char buffer[_MAX_PATH];
 	int offset = 0;
 	_putstr_offset(path, buffer, offset);

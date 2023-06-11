@@ -70,7 +70,7 @@ int GetMaterialIndex(const char* color)
 			return i;
 		}
 	}
-	printf("ERR: Missing color for material: %s\n", color);
+	printf("ERR: Missing texture for material: %s\n", color);
 	return 0;
 }
 
