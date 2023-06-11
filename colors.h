@@ -59,11 +59,19 @@ void LoadMats(const char* path)
 
 	char* str = (char*)malloc(10);
 	strcpy_s(str, 10, "ERR_MAT");
-	uint32_t* emptyData = (uint32_t*)malloc(4 * 252 * 252);
-	memset(emptyData, 0, 4 * 252 * 252);
-	Material nullMat = { str, emptyData };
+	uint32_t* missingTexture = (uint32_t*)malloc(4 * 252 * 252);
+	for (int py = 0; py < 252; py++)
+	{
+		for (int px = 0; px < 252; px++)
+		{ 
+			uint32_t color = 0;
+			if (((px / 42) + (py / 42)) % 2 == 0) color = 0xffdc00ff;
+			missingTexture[py * 252 + px] = color;
+		}
+	}
+	Material missingMat = { str, missingTexture };
 
-	allMaterials[0] = nullMat;
+	allMaterials[0] = missingMat;
 	int counter = 1;
 	char buffer[_MAX_PATH];
 	int offset = 0;

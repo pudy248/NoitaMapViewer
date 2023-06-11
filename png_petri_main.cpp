@@ -310,7 +310,7 @@ int main(int argc, char** argv)
 	std::ifstream save00ExistenceStream(streamInfoPath, std::ios::binary);
 	if (save00ExistenceStream.fail())
 	{
-		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with WorldMapViewer <path-to-save00>\n";
+		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with NoitaMapViewer <path-to-save00>\n";
 		return -1;
 	}
 	save00ExistenceStream.close();

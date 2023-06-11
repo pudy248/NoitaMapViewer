@@ -26,13 +26,19 @@ std::string read_compressed_file(const char* path)
     std::string compressed = read_file(path);
 
     if (compressed.size() < 8)
-        throw std::runtime_error{"No compression file header"};
+    {
+        printf("Error opening file %s:\n    Missing file header.\n", path);
+        return std::string("");
+    }
 
     auto compressed_size = read_le<std::uint32_t>(compressed.data());
     auto decompressed_size = read_le<std::uint32_t>(compressed.data() + 4);
 
     if (compressed.size() - 8 != compressed_size)
-        throw std::runtime_error{"Bad compressed size"};
+    {
+        printf("Error opening file %s:\n    Bad compressed size: file was %i bytes, expected %i.\n", path, compressed.size() - 8, compressed_size);
+        return std::string("");
+    }
 
     std::string output_buffer(decompressed_size, '\0');
     auto actual_size = fastlz_decompress(
@@ -42,10 +48,16 @@ std::string read_compressed_file(const char* path)
         output_buffer.size());
 
     if (actual_size == 0)
-        throw std::runtime_error{"Couldn't decompress file.\n"};
+    {
+        printf("Error opening file %s:\n    Failed to decompress.\n", path);
+        return std::string("");
+    }
 
     if (actual_size != output_buffer.size())
-        throw std::runtime_error{"Unexpected decompressed size"};
+    {
+        printf("Error opening file %s:\n    Unexpected decompressed size: file was %i bytes, expected %i.\n", path, output_buffer.size(), actual_size);
+        return std::string("");
+    }
 
     return output_buffer;
 }
