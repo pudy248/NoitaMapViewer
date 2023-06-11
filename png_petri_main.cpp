@@ -206,6 +206,9 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 
 				int pixX = rotatedTexX + physics_object.x - 512 * cx;
 				int pixY = rotatedTexY + physics_object.y - 512 * cy;
+
+				if (pixX < 0 || pixX >= 512 || pixY < 0 || pixY >= 512) continue;
+
 				int idx = pixY * 512 + pixX;
 				uint32_t c = physics_object.colors.data()[physics_object.width * texY + texX];
 				if ((c >> 24) == 0) continue;
