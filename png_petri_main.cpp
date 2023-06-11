@@ -136,6 +136,47 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	auto [physics_objects_start, custom_world_colors] =
 		read_vec_uint32(material_names_ptr);
 
+	auto physics_object_count = read_be<std::uint32_t>(physics_objects_start);
+	auto current_object = physics_objects_start + 4;
+
+	// assert version == 24
+	std::vector<PhysicsObject> physics_objects(physics_object_count);
+
+	for (auto i = 0; i != physics_object_count; ++i)
+	{
+		auto& into = physics_objects[i];
+
+		into.a = read_be<std::uint64_t>(current_object);
+		into.b = read_be<std::uint32_t>(current_object + 8);
+		into.x = read_be<float>(current_object + 12);
+		into.y = read_be<float>(current_object + 16);
+		into.rot_radians = read_be<float>(current_object + 20);
+		into.f = read_be<double>(current_object + 24);
+		into.g = read_be<double>(current_object + 32);
+		into.h = read_be<double>(current_object + 40);
+		into.i = read_be<double>(current_object + 48);
+		into.j = read_be<double>(current_object + 56);
+		into.k = read_be<bool>(current_object + 64);
+		into.l = read_be<bool>(current_object + 65);
+		into.m = read_be<bool>(current_object + 66);
+		into.n = read_be<bool>(current_object + 67);
+		into.o = read_be<bool>(current_object + 68);
+		into.z = read_be<float>(current_object + 69);
+		into.width = read_be<std::uint32_t>(current_object + 73);
+		into.height = read_be<std::uint32_t>(current_object + 77);
+
+		auto image_size = into.width * into.height;
+		into.colors.resize(image_size);
+
+		auto image_data = current_object + 81;
+		for (int i = 0; i != image_size; ++i)
+		{
+			into.colors[i] = read_be<std::uint32_t>(image_data);
+			image_data += 4;
+		}
+		current_object = image_data;
+	}
+
 	uint32_t* RGBABuffer = (uint32_t*)malloc(4 * 512 * 512);
 	auto custom_color_it = custom_world_colors.begin();
 	for (int i = 0; i != 512 * 512; ++i)
@@ -152,6 +193,24 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		else
 		{
 			RGBABuffer[i] = material_colors[material];
+		}
+	}
+	for (const auto& physics_object : physics_objects)
+	{
+		for (int texY = 0; texY < physics_object.height; texY++)
+		{
+			for (int texX = 0; texX < physics_object.width; texX++)
+			{
+				float rotatedTexX = texX * cosf(physics_object.rot_radians) - texY * sinf(physics_object.rot_radians);
+				float rotatedTexY = texX * sinf(physics_object.rot_radians) + texY * cosf(physics_object.rot_radians);
+
+				int pixX = rotatedTexX + physics_object.x - 512 * cx;
+				int pixY = rotatedTexY + physics_object.y - 512 * cy;
+				int idx = pixY * 512 + pixX;
+				uint32_t c = physics_object.colors.data()[physics_object.width * texY + texX];
+				if ((c >> 24) == 0) continue;
+				RGBABuffer[idx] = c;
+			}
 		}
 	}
 
@@ -216,7 +275,7 @@ int main(int argc, char** argv)
 
 	sf::Vector2f viewportCenter(512, 512);
 
-	constexpr float scrollZoomSensitivity = 1.2f;
+	constexpr float scrollZoomSensitivity = 2.0f;
 	constexpr float keyZoomSensitivity = 1.05f;
 	constexpr float keyPanSensitivity = 15;
 
@@ -225,45 +284,83 @@ int main(int argc, char** argv)
 	sf::Vector2f lastMousePos;
 	bool mouseDownLastFrame = false;
 
-	while (window.isOpen()) {
+	while (window.isOpen())
+	{
 		sf::Event event;
-		while (window.pollEvent(event)) {
+		while (window.pollEvent(event))
+		{
 			if (event.type == sf::Event::Closed)
 				window.close();
 
-			if (event.type == sf::Event::Resized) {
+			if (event.type == sf::Event::Resized)
+			{
 				handle_resize(sf::Vector2f(event.size.width, event.size.height));
 			}
-			
+
 			if (event.type == sf::Event::MouseWheelMoved)
 			{
-				zoomLevel *= event.mouseWheel.delta == 1 ? scrollZoomSensitivity : 1 / scrollZoomSensitivity;
+				if (event.mouseWheel.delta == 1)
+				{
+					sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel *= scrollZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
+				}
+				else
+				{
+					sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel /= scrollZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
+				}
 			}
 		}
-
-		float actualPanSensitivity = keyPanSensitivity;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) actualPanSensitivity *= 3;
-
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
-
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal)) zoomLevel *= keyZoomSensitivity;
-		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen)) zoomLevel /= keyZoomSensitivity;
-
-		if (sf::Mouse::isButtonPressed(sf::Mouse::Left) || sf::Mouse::isButtonPressed(sf::Mouse::Right))
+		if (window.hasFocus())
 		{
-			sf::Vector2f newMousePos = sf::Vector2f(sf::Mouse::getPosition());
-			if (mouseDownLastFrame)
+			float actualPanSensitivity = keyPanSensitivity;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) actualPanSensitivity *= 3;
+
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
+
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal))
 			{
-				sf::Vector2f posDiff = newMousePos - lastMousePos;
-				viewportCenter -= posDiff / zoomLevel;
+				sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+				sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+				zoomLevel *= keyZoomSensitivity;
+				sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+				sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+				viewportCenter += delta;
 			}
-			lastMousePos = newMousePos;
-			mouseDownLastFrame = true;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen))
+			{
+				sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+				sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+				zoomLevel /= keyZoomSensitivity;
+				sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+				sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+				viewportCenter += delta;
+			}
+
+			if (sf::Mouse::isButtonPressed(sf::Mouse::Left) || sf::Mouse::isButtonPressed(sf::Mouse::Right))
+			{
+				sf::Vector2f newMousePos = sf::Vector2f(sf::Mouse::getPosition());
+				if (mouseDownLastFrame)
+				{
+					sf::Vector2f posDiff = newMousePos - lastMousePos;
+					viewportCenter -= posDiff / zoomLevel;
+				}
+				lastMousePos = newMousePos;
+				mouseDownLastFrame = true;
+			}
+			else mouseDownLastFrame = false;
 		}
-		else mouseDownLastFrame = false;
 
 		window.clear(sf::Color::Black);
 
