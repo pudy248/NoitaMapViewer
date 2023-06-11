@@ -2,7 +2,7 @@
 Noita Map Viewer generates an image of your world based on data from your save, with no ingame mods or settings fiddling required, unlike MapCap. 
 Currently, most config options are still WIP, the program only loads chunks from the main world (a 70x48 chunk area), and there are no extra settings or ways to edit the save.
 
-Planned features include async rendering of chunks to bypass the startup loading time, filtering for specific materials, re-addition of box2d object rendering, and the ability to paint materials on the map and save them to your Noita save file.
+Planned features include async rendering of chunks to bypass the startup loading time, filtering for specific materials, and the ability to paint materials on the map and save them to your Noita save file.
 
 # Usage
 Simply extract the .zip from the most recent release (or build the program yourself if you're on Linux, prebuilt binaries pending), and run the executable. Then, WASD/arrow keys can be used for navigation and the scroll wheel zooms.
