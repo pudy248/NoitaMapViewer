@@ -132,11 +132,11 @@
   <ItemGroup>
     <ClInclude Include="binops.hpp" />
     <ClInclude Include="colors.h" />
-    <ClInclude Include="utils.hpp" />
+    <ClInclude Include="pngutils.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="png_petri_main.cpp" />
-    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

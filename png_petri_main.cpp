@@ -9,7 +9,7 @@
 #include <SFML/Graphics.hpp>
 
 #include "binops.hpp"
-#include "utils.hpp"
+#include "utils.h"
 #include "colors.h"
 
 struct PhysicsObject {
@@ -61,17 +61,16 @@ read_vec_uint32_result read_vec_uint32(const char* ptr)
 	return {ptr, result};
 }
 
-uint32_t GetColor(const char* color)
+int GetMaterialIndex(const char* color)
 {
 	for (int i = 0; i < numMats; i++)
 	{
-		//printf("comparing %s with %s\n", color, allColors[i].name);
-		if (strcmp(color, allColors[i].name) == 0)
+		if (strcmp(color, allMaterials[i].name) == 0)
 		{
-			//printf("Success! Returning color #%06x for string %s\n", allColors[i].color, color);
-			return allColors[i].color;
+			return i;
 		}
 	}
+	printf("Missing color: %s!\n", color);
 	return 0;
 }
 
@@ -129,9 +128,9 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		material_names_ptr += 4 + size;
 	}
 
-	uint32_t* material_colors = (uint32_t*)malloc(4 * material_name_count);
+	int* material_indices = (int*)malloc(4 * material_name_count);
 	for (int i = 0; i < material_name_count; i++)
-		material_colors[i] = (GetColor(material_names[i].c_str()) | 0xff000000);
+		material_indices[i] = GetMaterialIndex(material_names[i].c_str());
 
 	auto [physics_objects_start, custom_world_colors] =
 		read_vec_uint32(material_names_ptr);
@@ -192,7 +191,15 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		}
 		else
 		{
-			RGBABuffer[i] = material_colors[material];
+			Material m = allMaterials[material_indices[material]];
+			int gx = posx + cx * 512;
+			int gy = posy + cy * 512;
+			gx *= 6;
+			gy *= 6;
+			int texX = ((gx % 252) + 252) % 252;
+			int texY = ((gy % 252) + 252) % 252;
+			uint32_t color = m.tex[texY * 252 + texX];
+			RGBABuffer[i] = color;//swapEndianness(color);
 		}
 	}
 	for (const auto& physics_object : physics_objects)
@@ -220,7 +227,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	sf::Texture world_texture;
 	world_texture.create(0x200, 0x200);
 	world_texture.update((unsigned char*)RGBABuffer, 512, 512, 0, 0);
-	free(material_colors);
+	free(material_indices);
 	free(RGBABuffer);
 	printf("finished rendering chunk at (%i, %i)\n", cx, cy);
 	return { cx, cy, world_texture };
@@ -228,7 +235,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 
 int main(int argc, char** argv)
 {
-	char save00_path[200];
+	char save00_path[_MAX_PATH];
 	if (argc > 1)
 	{
 		strcpy_s(save00_path, argv[1]);
@@ -236,14 +243,14 @@ int main(int argc, char** argv)
 	else
 	{
 		strcpy_s(save00_path, "%appdata%");
-		size_t bufferSize = 200;
+		size_t bufferSize = _MAX_PATH;
 		getenv_s(&bufferSize, save00_path, "appdata");
 		std::string tempStr(save00_path);
 		tempStr = tempStr.substr(0, tempStr.length() - 8);
 		sprintf_s(save00_path, "%s/LocalLow/Nolla_Games_Noita/save00", tempStr.c_str());
 	}
 
-	char streamInfoPath[200];
+	char streamInfoPath[_MAX_PATH];
 	sprintf_s(streamInfoPath, "%s/world/.stream_info", save00_path);
 
 	std::ifstream save00ExistenceStream(streamInfoPath, std::ios::binary);
@@ -269,7 +276,7 @@ int main(int argc, char** argv)
 
 	handle_resize(initial_display_sz);
 
-
+	LoadMats("mats/");
 	std::vector<ChunkSprite> chunks;
 	for (int i = -36; i < 34; i++)
 		for (int j = -14; j < 35; j++)

@@ -1,18 +1,18 @@
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 
 #include <fastlz.h>
 
 #include "binops.hpp"
 
-#include "utils.hpp"
-
 std::string read_file(const char* path)
 {
     std::string out;
     std::ifstream stream(path, std::ios::binary);
-    while (stream) {
+    while (stream)
+    {
         char buffer[1024];
         stream.read(buffer, sizeof(buffer));
         out.append(buffer, stream.gcount());
@@ -36,10 +36,10 @@ std::string read_compressed_file(const char* path)
 
     std::string output_buffer(decompressed_size, '\0');
     auto actual_size = fastlz_decompress(
-            compressed.data() + 8,
-            compressed_size,
-            output_buffer.data(),
-            output_buffer.size());
+        compressed.data() + 8,
+        compressed_size,
+        output_buffer.data(),
+        output_buffer.size());
 
     if (actual_size == 0)
         throw std::runtime_error{"Couldn't decompress file.\n"};
