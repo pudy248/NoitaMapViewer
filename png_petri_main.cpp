@@ -168,9 +168,9 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		into.colors.resize(image_size);
 
 		auto image_data = current_object + 81;
-		for (int i = 0; i != image_size; ++i)
+		for (int j = 0; j != image_size; ++j)
 		{
-			into.colors[i] = read_be<std::uint32_t>(image_data);
+			into.colors[j] = read_be<std::uint32_t>(image_data);
 			image_data += 4;
 		}
 		current_object = image_data;
