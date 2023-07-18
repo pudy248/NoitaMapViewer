@@ -132,8 +132,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	for (int i = 0; i < material_name_count; i++)
 		material_indices[i] = GetMaterialIndex(material_names[i].c_str());
 
-	auto [physics_objects_start, custom_world_colors] =
-		read_vec_uint32(material_names_ptr);
+	auto [physics_objects_start, custom_world_colors] = read_vec_uint32(material_names_ptr);
 
 	auto physics_object_count = read_be<std::uint32_t>(physics_objects_start);
 	auto current_object = physics_objects_start + 4;
@@ -141,7 +140,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	// assert version == 24
 	std::vector<PhysicsObject> physics_objects(physics_object_count);
 
-	for (auto i = 0; i != physics_object_count; ++i)
+	for (auto i = 0; i < physics_object_count; ++i)
 	{
 		auto& into = physics_objects[i];
 
@@ -168,9 +167,9 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		into.colors.resize(image_size);
 
 		auto image_data = current_object + 81;
-		for (int i = 0; i != image_size; ++i)
+		for (int j = 0; j < image_size; ++j)
 		{
-			into.colors[i] = read_be<std::uint32_t>(image_data);
+			into.colors[j] = read_be<std::uint32_t>(image_data);
 			image_data += 4;
 		}
 		current_object = image_data;
@@ -311,6 +310,7 @@ int main(int argc, char** argv)
 	if (save00ExistenceStream.fail())
 	{
 		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with NoitaMapViewer <path-to-save00>\n";
+		std::getchar();
 		return -1;
 	}
 	save00ExistenceStream.close();
