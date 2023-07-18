@@ -213,24 +213,56 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	}
 	for (const auto& physics_object : physics_objects)
 	{
-		for (int texY = 0; texY < physics_object.height; texY++)
+		int lx = rint(physics_object.x) - 512 * cx;
+		int ly = rint(physics_object.y) - 512 * cy;
+		int ux = lx;
+		int uy = ly;
+
+		float cosine = cosf(physics_object.rot_radians);
+		float sine = sinf(physics_object.rot_radians);
+
+		if (cosine > 0)
 		{
-			for (int texX = 0; texX < physics_object.width; texX++)
+			ux += physics_object.width * cosine;
+			uy += physics_object.height * cosine;
+		}
+		else
+		{
+			lx += physics_object.width * cosine;
+			ly += physics_object.height * cosine;
+		}
+
+		if (sine > 0)
+		{
+			lx -= physics_object.height * sine;
+			uy += physics_object.width * sine;
+		}
+		else
+		{
+			ux -= physics_object.height * sine;
+			ly += physics_object.width * sine;
+		}
+		lx = std::min(std::max(lx, 0), 511);
+		ly = std::min(std::max(ly, 0), 511);
+		ux = std::min(std::max(ux, 0), 511);
+		uy = std::min(std::max(uy, 0), 511);
+
+		for (int pixY = ly; pixY < uy; pixY++)
+			for (int pixX = lx; pixX < uy; pixX++)
 			{
-				float rotatedTexX = texX * cosf(physics_object.rot_radians) - texY * sinf(physics_object.rot_radians);
-				float rotatedTexY = texX * sinf(physics_object.rot_radians) + texY * cosf(physics_object.rot_radians);
+				float offsetPixX = pixX - (rintf(physics_object.x) - 512 * cx);
+				float offsetPixY = pixY - (rintf(physics_object.y) - 512 * cy);
 
-				int pixX = rintf(rotatedTexX) + rintf(physics_object.x) - 512 * cx;
-				int pixY = rintf(rotatedTexY) + rintf(physics_object.y) - 512 * cy;
+				int texX = rint(offsetPixX * cosine + offsetPixY * sine);
+				int texY = rint(-offsetPixX * sine + offsetPixY * cosine);
 
-				if (pixX < 0 || pixX >= 512 || pixY < 0 || pixY >= 512) continue;
+				if (texX < 0 || physics_object.width <= texX || texY < 0 || physics_object.height <= texY) continue;
 
 				int idx = pixY * 512 + pixX;
 				uint32_t c = physics_object.colors.data()[physics_object.width * texY + texX];
 				if ((c >> 24) == 0) continue;
 				RGBABuffer[idx] = c;
 			}
-		}
 	}
 
 	sf::Texture world_texture;
