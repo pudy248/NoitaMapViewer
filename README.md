@@ -5,7 +5,7 @@ Currently, most config options are still WIP, and there are no extra settings or
 Planned features include async rendering of chunks to bypass the startup loading time, filtering for specific materials, and the ability to paint materials on the map and save them to your Noita save file.
 
 # Usage
-Simply extract the .zip from the most recent release (or build the program yourself if you're on Linux, prebuilt binaries pending), and run the executable. Then, WASD/arrow keys can be used for navigation and the scroll wheel zooms.
+Simply extract the .zip from the most recent release (or build the program yourself if you're on Linux, prebuilt binaries pending), and run the executable. Then, WASD/arrow keys can be used for navigation and the scroll wheel zooms. LAlt toggles coordinate visibility.
 For Windows users, the program will attempt to automatically locate your save, although you can pass an alternate directory to /save00/ as the first command line argument.
 Linux users always need to use the argument to provide a path to save00, since the directory can vary considerably.
 
