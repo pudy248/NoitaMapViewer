@@ -382,6 +382,8 @@ int main(int argc, char** argv)
 
 	sf::Vector2f lastMousePos;
 	bool mouseDownLastFrame = false;
+	
+	bool tooltipEnabled = true;
 
 	while (window.isOpen())
 	{
@@ -416,6 +418,11 @@ int main(int argc, char** argv)
 					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
 					viewportCenter += delta;
 				}
+			}
+
+			if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::LAlt)
+			{
+				tooltipEnabled = !tooltipEnabled;
 			}
 		}
 		if (window.hasFocus())
@@ -472,6 +479,20 @@ int main(int argc, char** argv)
 			s.setScale(zoomLevel, zoomLevel);
 			s.setPosition((chunk.cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk.cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
+		}
+
+		if (tooltipEnabled)
+		{
+
+			sf::Vector2f mPosPixelLocal = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+			sf::Vector2f mPosPixelAbsolute = mPosPixelLocal / zoomLevel + viewportCenter;
+			char tooltip[64];
+			sprintf_s(tooltip, "(%i, %i)", (int)mPosPixelAbsolute.x, (int)mPosPixelAbsolute.y);
+			sf::Font font = sf::Font();
+			font.loadFromFile("NoitaPixel.ttf");
+			sf::Text text = sf::Text(sf::String((const char*)tooltip), font);
+			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 10));
+			window.draw(text);
 		}
 
 		window.display();
