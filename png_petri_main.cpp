@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <conio.h>
 
 #include <SFML/Graphics.hpp>
 
@@ -78,6 +79,7 @@ struct ChunkSprite
 {
 	int cx;
 	int cy;
+	uint32_t* backingBuffer;
 	sf::Texture tex;
 };
 
@@ -89,7 +91,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	if (fileExistenceStream.fail())
 	{
 		//std::cerr << "File not found: " << pathBuffer << '\n';
-		return { cx, cy, sf::Texture() };
+		return { cx, cy, NULL, sf::Texture() };
 	}
 	fileExistenceStream.close();
 
@@ -107,7 +109,7 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 		std::cerr << "  version: " << version << '\n';
 		std::cerr << "  width?: " << width_q << '\n';
 		std::cerr << "  height?: " << height_q << '\n';
-		return { cx, cy, sf::Texture() };
+		return { cx, cy, NULL, sf::Texture() };
 	}
 
 	auto world_cells_start = data + 12;
@@ -269,9 +271,8 @@ ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
 	world_texture.create(0x200, 0x200);
 	world_texture.update((unsigned char*)RGBABuffer, 512, 512, 0, 0);
 	free(material_indices);
-	free(RGBABuffer);
 	printf("finished rendering chunk at (%i, %i)\n", cx, cy);
-	return { cx, cy, world_texture };
+	return { cx, cy, RGBABuffer, world_texture };
 }
 
 void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
@@ -318,6 +319,36 @@ void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
 	}
 }
 
+void ExportMapImage(std::vector<ChunkSprite>& chunks)
+{
+	int minX = 10000;
+	int maxX = -10000;
+	int minY = 10000;
+	int maxY = -10000;
+	for (ChunkSprite& s : chunks)
+	{
+		if (s.cx < minX) minX = s.cx;
+		if (s.cx > maxX) maxX = s.cx;
+		if (s.cy < minY) minY = s.cy;
+		if (s.cy > maxY) maxY = s.cy;
+	}
+	int width = (maxX - minX + 1) * 512;
+	int height = (maxY - minY + 1) * 512;
+	uint32_t* buf = (uint32_t*)malloc(4 * width * height);
+	memset(buf, 0, 4 * width * height);
+	for (ChunkSprite& s : chunks)
+	{
+		int dx = s.cx - minX;
+		int dy = s.cy - minY;
+		uint32_t* rowStart = buf + (512 * dy * width + 512 * dx);
+		for (int i = 0; i < 512; i++)
+		{
+			memcpy(rowStart + i * width, s.backingBuffer + i * 512, 512 * 4);
+		}
+	}
+	WriteImageRGBA("map.png", (uint8_t*)buf, width, height);
+}
+
 int main(int argc, char** argv)
 {
 	char save00_path[_MAX_PATH];
@@ -342,11 +373,10 @@ int main(int argc, char** argv)
 	if (save00ExistenceStream.fail())
 	{
 		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with NoitaMapViewer <path-to-save00>\n";
-		std::getchar();
+		_getch();
 		return -1;
 	}
 	save00ExistenceStream.close();
-
 
 	//char pathBuffer[200];
 	//sprintf_s(pathBuffer, "%s/world/area_0.bin", save00_path);
@@ -420,9 +450,18 @@ int main(int argc, char** argv)
 				}
 			}
 
-			if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::LAlt)
+			if (event.type == sf::Event::KeyPressed)
 			{
-				tooltipEnabled = !tooltipEnabled;
+				if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
+				{
+					tooltipEnabled = !tooltipEnabled;
+				}
+				else if (event.key.code == sf::Keyboard::S && event.key.control)
+				{
+					printf("Saving map to map.png...\n");
+					ExportMapImage(chunks);
+					printf("Done!\n");
+				}
 			}
 		}
 		if (window.hasFocus())

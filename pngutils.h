@@ -41,8 +41,53 @@ void WriteImage(const char* file_name, uint8_t* data, int w, int h)
 	/* write header */
 
 	png_set_IHDR(png_ptr, info_ptr, w, h,
-					bit_depth, color_type, PNG_INTERLACE_NONE,
-					PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+		bit_depth, color_type, PNG_INTERLACE_NONE,
+		PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+	png_write_info(png_ptr, info_ptr);
+
+	/* write bytes */
+	png_write_image(png_ptr, rows);
+
+	/* end write */
+
+	png_write_end(png_ptr, NULL);
+
+	fclose(fp);
+
+	free(rows);
+}
+
+void WriteImageRGBA(const char* file_name, uint8_t* data, int w, int h)
+{
+	png_bytep* rows = (png_bytep*)malloc(sizeof(void*) * h);
+	for (int y = 0; y < h; y++)
+	{
+		rows[y] = data + 4 * y * w;
+	}
+
+	/* create file */
+	FILE* fp;
+	fopen_s(&fp, file_name, "wb");
+
+	png_structp png_ptr;
+	png_infop info_ptr;
+
+	png_byte color_type = PNG_COLOR_TYPE_RGBA;
+	png_byte bit_depth = 8;
+
+	/* initialize stuff */
+	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	info_ptr = png_create_info_struct(png_ptr);
+
+	png_init_io(png_ptr, fp);
+
+	/* write header */
+
+	png_set_IHDR(png_ptr, info_ptr, w, h,
+		bit_depth, color_type, PNG_INTERLACE_NONE,
+		PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
 	png_write_info(png_ptr, info_ptr);
 
