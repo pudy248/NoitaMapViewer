@@ -14,6 +14,8 @@ Simply extract the .zip from the most recent release (or build the program yours
 For Windows users, the program will attempt to automatically locate your save, although you can pass an alternate directory to /save00/ as the first command line argument.
 Linux users always need to use the argument to provide a path to save00, since the directory can vary considerably.
 
+Linux users also have to build the project from scratch as no linux release is provided at the moment. Prerequisites are fastlz, libpng, and sfml. If you can't get it to work, I might be able to help you but I am not a linuxer so you may be on your own.
+
 # Credits
 dexterCD - Reverse engineered all of the .png_petri format before I got to it, and did a much better job than I probably could have. Responsible for a majority of the save loading for this tool
 
