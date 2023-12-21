@@ -36,7 +36,7 @@ std::string read_compressed_file(const char* path)
 
     if (compressed.size() - 8 != compressed_size)
     {
-        printf("Error opening file %s:\n    Bad compressed size: file was %i bytes, expected %i.\n", path, compressed.size() - 8, compressed_size);
+        printf("Error opening file %s:\n    Bad compressed size: file was %zi bytes, expected %i.\n", path, compressed.size() - 8, compressed_size);
         return std::string("");
     }
 
@@ -55,7 +55,7 @@ std::string read_compressed_file(const char* path)
 
     if (actual_size != output_buffer.size())
     {
-        printf("Error opening file %s:\n    Unexpected decompressed size: file was %i bytes, expected %i.\n", path, output_buffer.size(), actual_size);
+        printf("Error opening file %s:\n    Unexpected decompressed size: file was %zi bytes, expected %i.\n", path, output_buffer.size(), actual_size);
         return std::string("");
     }
 

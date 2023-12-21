@@ -311,8 +311,7 @@ void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
 				int py = atoi(buffer + secondUnderscore + 1);
 				int cx = px / 512;
 				int cy = py / 512;
-
-				outVec.push_back(RenderChunk(save00_path, cx, cy));
+				outVec.emplace_back(RenderChunk(save00_path, cx, cy));
 			}
 		} while (::FindNextFile(hFind, &fd));
 		::FindClose(hFind);
@@ -332,16 +331,21 @@ void ExportMapImage(std::vector<ChunkSprite>& chunks)
 		if (s.cy < minY) minY = s.cy;
 		if (s.cy > maxY) maxY = s.cy;
 	}
-	int width = (maxX - minX + 1) * 512;
-	int height = (maxY - minY + 1) * 512;
+	size_t width = (maxX - minX + 1) * 512;
+	size_t height = (maxY - minY + 1) * 512;
 	uint32_t* buf = (uint32_t*)malloc(4 * width * height);
+	if (!buf)
+	{
+		printf("Map is too big to save! Aborting...\n");
+		return;
+	}
 	memset(buf, 0, 4 * width * height);
 	for (ChunkSprite& s : chunks)
 	{
-		int dx = s.cx - minX;
-		int dy = s.cy - minY;
+		size_t dx = s.cx - minX;
+		size_t dy = s.cy - minY;
 		uint32_t* rowStart = buf + (512 * dy * width + 512 * dx);
-		for (int i = 0; i < 512; i++)
+		for (size_t i = 0; i < 512; i++)
 		{
 			memcpy(rowStart + i * width, s.backingBuffer + i * 512, 512 * 4);
 		}
