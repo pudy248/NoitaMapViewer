@@ -5,8 +5,9 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <memory>
 #include <vector>
+#include <thread>
+#include <mutex>
 #include <conio.h>
 
 #include <SFML/Graphics.hpp>
@@ -88,7 +89,7 @@ struct Chunk
 {
 	int cx;
 	int cy;
-	bool g_dirty = true;
+	bool g_dirty = false;
 	bool s_dirty = false;
 	std::string cpath;
 	std::vector<MatIdx> matNames;
@@ -97,15 +98,13 @@ struct Chunk
 	uint32_t texBuffer[512 * 512];
 	
 	std::vector<PhysicsObject> physObjs;
-	sf::Texture tex;
+	sf::Texture* tex;
 
 	Chunk() = default;
-	Chunk(const char* save00_path, int _cx, int _cy) : cx(_cx), cy(_cy)
+	Chunk(const char* path, int _cx, int _cy) : cx(_cx), cy(_cy)
 	{
-		char pathBuffer[200];
-		sprintf_s(pathBuffer, "%s/world/world_%i_%i.png_petri", save00_path, cx * 512, cy * 512);
-		cpath = std::string(pathBuffer);
-		std::string file_contents = read_compressed_file(pathBuffer);
+		cpath = std::string(path);
+		std::string file_contents = read_compressed_file(path);
 		const char* data = file_contents.c_str();
 		const char* data_end = data + file_contents.size();
 
@@ -188,8 +187,8 @@ struct Chunk
 			physObjs.push_back(into);
 		}
 
-		tex.create(0x200, 0x200);
-		update();
+		redraw_mats();
+		redraw_physics();
 
 		printf("finished loading chunk at (%i, %i)\n", cx, cy);
 	}
@@ -336,7 +335,7 @@ struct Chunk
 	}
 	void update_tex()
 	{
-		tex.update((unsigned char*)texBuffer, 512, 512, 0, 0);
+		tex->update((unsigned char*)texBuffer, 512, 512, 0, 0);
 	}
 	void update()
 	{
@@ -364,9 +363,16 @@ struct Chunk
 	}
 };
 
-static void IteratePngPetris(const char* save00_path, std::vector<Chunk*>& outVec)
+struct PetriPath
+{
+	std::string path;
+	int cx;
+	int cy;
+};
+static std::vector<PetriPath> GetPngPetris(const char* save00_path)
 {
 	WIN32_FIND_DATA fd;
+	std::vector<PetriPath> outVec;
 
 	char buffer[_MAX_PATH];
 	int offset = 0;
@@ -400,11 +406,24 @@ static void IteratePngPetris(const char* save00_path, std::vector<Chunk*>& outVe
 				int py = atoi(buffer + secondUnderscore + 1);
 				int cx = px / 512;
 				int cy = py / 512;
-				outVec.emplace_back(new Chunk(save00_path, cx, cy));
+				PetriPath path = { std::string(buffer), cx, cy };
+				outVec.push_back(path);
 			}
 		} while (::FindNextFile(hFind, &fd));
 		::FindClose(hFind);
 	}
+	return outVec;
+}
+static void ThreadLoadChunks(int tIdx, int tStride, std::vector<PetriPath> paths, std::vector<Chunk*>* outVec, std::mutex* lock)
+{
+	for (int i = tIdx; i < paths.size(); i += tStride)
+	{
+		Chunk* c = new Chunk(paths[i].path.c_str(), paths[i].cx, paths[i].cy);
+		lock->lock();
+		outVec->push_back(c);
+		lock->unlock();
+	}
+	return;
 }
 
 static void ExportMapImage(std::vector<Chunk*>& chunks)
@@ -441,7 +460,6 @@ static void ExportMapImage(std::vector<Chunk*>& chunks)
 	}
 	WriteImageRGBA("map.png", (uint8_t*)buf, width, height);
 }
-
 
 sf::Vector2f viewportCenter(512, 512);
 float zoomLevel = 1;
@@ -486,8 +504,8 @@ static void set_circle(std::vector<Chunk*> chunks, sf::Vector2f center, float ra
 			int x = center.x + dx;
 			int y = center.y + dy;
 			sf::Vector2f diff = sf::Vector2f(x + 0.5f, y + 0.5f) - center;
-			float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
-			if (dist > radius) continue;
+			float dist = diff.x * diff.x + diff.y * diff.y;
+			if (dist > radius * radius) continue;
 
 			sf::Vector2i gPos = roundGlobal(sf::Vector2f((int)x, (int)y));
 			sf::Vector2i cPos = globalToChunk(gPos);
@@ -545,8 +563,17 @@ int main(int argc, char** argv)
 	save00ExistenceStream.close();
 
 	LoadMats("mats/");
+	auto paths = GetPngPetris(save00_path);
 	std::vector<Chunk*> chunks;
-	IteratePngPetris(save00_path, chunks);
+	std::vector<std::thread> threads;
+	std::mutex lock;
+	for (int i = 0; i < std::thread::hardware_concurrency(); i++)
+		threads.emplace_back(std::thread(ThreadLoadChunks, i, std::thread::hardware_concurrency(), paths, &chunks, &lock));
+	for (int i = 0; i < std::thread::hardware_concurrency(); i++)
+	{
+		while (!threads[i].joinable());
+		threads[i].join();
+	}
 
 	sf::Vector2f initial_display_sz(950.f, 800.f);
 	sf::RenderWindow window(
@@ -560,6 +587,13 @@ int main(int argc, char** argv)
 		window.setView(view);
 	};
 	handle_resize(initial_display_sz);
+
+	for (Chunk* c : chunks)
+	{
+		c->tex = new sf::Texture();
+		c->tex->create(512, 512);
+		c->update_tex();
+	}
 
 	sf::Font font = sf::Font();
 	font.loadFromFile("NoitaPixel.ttf");
@@ -773,7 +807,7 @@ int main(int argc, char** argv)
 		{
 			if (chunk->g_dirty) chunk->update();
 			sf::Sprite s;
-			s.setTexture(chunk->tex);
+			s.setTexture(*chunk->tex);
 			s.setScale(zoomLevel, zoomLevel);
 			s.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
