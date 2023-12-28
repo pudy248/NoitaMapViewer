@@ -1,9 +1,11 @@
 #include <cstdint>
 #include <cstring>
+#include <cmath>
+#include <string>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <memory>
-#include <string>
 #include <vector>
 #include <conio.h>
 
@@ -34,21 +36,12 @@ struct PhysicsObject {
 	std::uint32_t height;
 	std::vector<std::uint32_t> colors;
 };
-
-struct RenderObject {
-	sf::Sprite sprite;
-	std::unique_ptr<sf::Texture> texture;
-	const PhysicsObject* physics_object;
-};
-
-const float degrees_in_radians = 57.2957795131;
-
+const float degrees_in_radians = 57.2957795131f;
 struct read_vec_uint32_result {
 	const char* ptr;
 	std::vector<std::uint32_t> data;
 };
-
-read_vec_uint32_result read_vec_uint32(const char* ptr)
+static read_vec_uint32_result read_vec_uint32(const char* ptr)
 {
 	auto count = read_be<std::uint32_t>(ptr);
 	std::vector<std::uint32_t> result(count);
@@ -62,220 +55,316 @@ read_vec_uint32_result read_vec_uint32(const char* ptr)
 	return {ptr, result};
 }
 
-int GetMaterialIndex(const char* color)
+static int GetMaterialIndex(const char* name)
 {
 	for (int i = 0; i < numMats; i++)
 	{
-		if (allMaterials[i].name != NULL && strcmp(color, allMaterials[i].name) == 0)
+		if (allMaterials[i].name != NULL && strcmp(name, allMaterials[i].name) == 0)
 		{
 			return i;
 		}
 	}
-	printf("ERR: Missing texture for material: %s\n", color);
+	printf("ERR: Missing texture for material: %s\n", name);
 	return 0;
 }
+struct MatIdx
+{
+	std::string mat;
+	int idx;
+	MatIdx() = default;
+	MatIdx(std::string _m, int _i) : mat(_m), idx(_i) {}
+};
+static int IndexOrAdd(std::vector<MatIdx>& mats, const char* mat)
+{
+	for (int i = 0; i < mats.size(); i++)
+	{
+		if (!strcmp(mats[i].mat.c_str(), mat)) return i;
+	}
+	mats.push_back(MatIdx(std::string(mat), GetMaterialIndex(mat)));
+	return mats.size() - 1;
+}
 
-struct ChunkSprite
+struct Chunk
 {
 	int cx;
 	int cy;
-	uint32_t* backingBuffer;
+	bool g_dirty = true;
+	bool s_dirty = false;
+	std::string cpath;
+	std::vector<MatIdx> matNames;
+	uint8_t materials[512 * 512];
+	uint32_t customColors[512 * 512];
+	uint32_t texBuffer[512 * 512];
+	
+	std::vector<PhysicsObject> physObjs;
 	sf::Texture tex;
+
+	Chunk() = default;
+	Chunk(const char* save00_path, int _cx, int _cy) : cx(_cx), cy(_cy)
+	{
+		char pathBuffer[200];
+		sprintf_s(pathBuffer, "%s/world/world_%i_%i.png_petri", save00_path, cx * 512, cy * 512);
+		cpath = std::string(pathBuffer);
+		std::string file_contents = read_compressed_file(pathBuffer);
+		const char* data = file_contents.c_str();
+		const char* data_end = data + file_contents.size();
+
+		uint32_t version = read_be<std::uint32_t>(data);
+		uint32_t width_q = read_be<std::uint32_t>(data + 4);
+		uint32_t height_q = read_be<std::uint32_t>(data + 8);
+
+		if (version != 24 || width_q != 512 || height_q != 512)
+		{
+			std::cerr << "Unexpected header:\n";
+			std::cerr << "  version: " << version << '\n';
+			std::cerr << "  width?: " << width_q << '\n';
+			std::cerr << "  height?: " << height_q << '\n';
+			exit(-1);
+		}
+
+		const char* world_cells_start = data + 12;
+		std::memcpy(materials, world_cells_start, 512 * 512);
+
+		const char* material_names_start = world_cells_start + 512 * 512;
+		uint32_t material_name_count = read_be<std::uint32_t>(material_names_start);
+
+		const char* material_names_ptr = material_names_start + 4;
+		for (int i = 0; i < material_name_count; ++i)
+		{
+			uint32_t size = read_be<std::uint32_t>(material_names_ptr);
+			std::string s = std::string(material_names_ptr + 4, size);
+			matNames.push_back(MatIdx(s, GetMaterialIndex(s.c_str())));
+			material_names_ptr += 4 + size;
+		}
+
+		auto [physics_objects_start, custom_world_colors] = read_vec_uint32(material_names_ptr);
+
+		int ccIt = 0;
+		for (int i = 0; i < 512 * 512; i++)
+		{
+			if (materials[i] & 0x80)
+			{
+				customColors[i] = custom_world_colors[ccIt++];
+			}
+			else customColors[i] = 0;
+		}
+
+		auto physics_object_count = read_be<std::uint32_t>(physics_objects_start);
+		auto current_object = physics_objects_start + 4;
+
+		for (auto i = 0; i < physics_object_count; ++i)
+		{
+			PhysicsObject into;
+
+			into.a = read_be<std::uint64_t>(current_object);
+			into.b = read_be<std::uint32_t>(current_object + 8);
+			into.x = read_be<float>(current_object + 12);
+			into.y = read_be<float>(current_object + 16);
+			into.rot_radians = read_be<float>(current_object + 20);
+			into.f = read_be<double>(current_object + 24);
+			into.g = read_be<double>(current_object + 32);
+			into.h = read_be<double>(current_object + 40);
+			into.i = read_be<double>(current_object + 48);
+			into.j = read_be<double>(current_object + 56);
+			into.k = read_be<bool>(current_object + 64);
+			into.l = read_be<bool>(current_object + 65);
+			into.m = read_be<bool>(current_object + 66);
+			into.n = read_be<bool>(current_object + 67);
+			into.o = read_be<bool>(current_object + 68);
+			into.z = read_be<float>(current_object + 69);
+			into.width = read_be<std::uint32_t>(current_object + 73);
+			into.height = read_be<std::uint32_t>(current_object + 77);
+
+			auto image_size = into.width * into.height;
+			into.colors.resize(image_size);
+
+			auto image_data = current_object + 81;
+			for (int j = 0; j < image_size; ++j)
+			{
+				into.colors[j] = read_be<std::uint32_t>(image_data);
+				image_data += 4;
+			}
+			current_object = image_data;
+			physObjs.push_back(into);
+		}
+
+		tex.create(0x200, 0x200);
+		update();
+
+		printf("finished loading chunk at (%i, %i)\n", cx, cy);
+	}
+
+	void save()
+	{
+		s_dirty = false;
+		std::ostringstream s;
+
+		write_be<std::uint32_t>(s, 24);
+		write_be<std::uint32_t>(s, 512);
+		write_be<std::uint32_t>(s, 512);
+
+		s.write((const char*)materials, 512 * 512);
+		write_be<std::uint32_t>(s, matNames.size());
+		for (int i = 0; i < matNames.size(); i++)
+		{
+			write_be<std::uint32_t>(s, matNames[i].mat.size());
+			s.write(matNames[i].mat.c_str(), matNames[i].mat.size());
+		}
+		int count = 0;
+		for (int i = 0; i < 512 * 512; i++) if (materials[i] & 0x80) count++;
+		write_be<std::uint32_t>(s, count);
+		for (int i = 0; i < 512 * 512; i++)
+		{
+			if (materials[i] & 0x80) write_be<std::uint32_t>(s, customColors[i]);
+		}
+
+		write_be<std::uint32_t>(s, physObjs.size());
+		for (auto i = 0; i < physObjs.size(); ++i)
+		{
+			PhysicsObject out = physObjs[i];
+			write_be<std::uint64_t>(s, out.a);
+			write_be<std::uint32_t>(s, out.b);
+			write_be<float>(s, out.x);
+			write_be<float>(s, out.y);
+			write_be<float>(s, out.rot_radians);
+			write_be<double>(s, out.f);
+			write_be<double>(s, out.g);
+			write_be<double>(s, out.h);
+			write_be<double>(s, out.i);
+			write_be<double>(s, out.j);
+			write_be<bool>(s, out.k);
+			write_be<bool>(s, out.l);
+			write_be<bool>(s, out.m);
+			write_be<bool>(s, out.n);
+			write_be<bool>(s, out.o);
+			write_be<float>(s, out.z);
+			write_be<std::uint32_t>(s, out.width);
+			write_be<std::uint32_t>(s, out.height);
+
+			auto image_size = out.width * out.height;
+			for (int j = 0; j < image_size; ++j)
+			{
+				write_be<std::uint32_t>(s, out.colors[j]);
+			}
+		}
+		write_compressed_file(cpath.c_str(), s.str());
+
+		printf("finished saving chunk at (%i, %i)\n", cx, cy);
+	}
+
+	void redraw_mats()
+	{
+		for (int y = 0; y < 512; y++)
+		{
+			for (int x = 0; x < 512; x++)
+			{
+				int i = y * 512 + x;
+				uint8_t material = materials[i] & 0x7f;
+				bool custom_color = (materials[i] & 0x80) != 0;
+				if (custom_color)
+					texBuffer[i] = customColors[i];
+				else
+				{
+					Material m = allMaterials[matNames[material].idx];
+					int gx = x + cx * 512;
+					int gy = y + cy * 512;
+					gx *= 6;
+					gy *= 6;
+					int texX = ((gx % 252) + 252) % 252;
+					int texY = ((gy % 252) + 252) % 252;
+					uint32_t color = m.tex[texY * 252 + texX];
+					texBuffer[i] = color;
+				}
+			}
+		}
+	}
+	void redraw_physics()
+	{
+		for (const auto& physics_object : physObjs)
+		{
+			int lx = rint(physics_object.x) - 512 * cx;
+			int ly = rint(physics_object.y) - 512 * cy;
+			int ux = lx;
+			int uy = ly;
+
+			float cosine = cosf(physics_object.rot_radians);
+			float sine = sinf(physics_object.rot_radians);
+
+			if (cosine > 0)
+			{
+				ux += physics_object.width * cosine;
+				uy += physics_object.height * cosine;
+			}
+			else
+			{
+				lx += physics_object.width * cosine;
+				ly += physics_object.height * cosine;
+			}
+
+			if (sine > 0)
+			{
+				lx -= physics_object.height * sine;
+				uy += physics_object.width * sine;
+			}
+			else
+			{
+				ux -= physics_object.height * sine;
+				ly += physics_object.width * sine;
+			}
+			lx = std::min(std::max(lx, 0), 511);
+			ly = std::min(std::max(ly, 0), 511);
+			ux = std::min(std::max(ux, 0), 511);
+			uy = std::min(std::max(uy, 0), 511);
+
+			for (int pixY = ly; pixY < uy; pixY++)
+				for (int pixX = lx; pixX < uy; pixX++)
+				{
+					float offsetPixX = pixX - (rintf(physics_object.x) - 512 * cx);
+					float offsetPixY = pixY - (rintf(physics_object.y) - 512 * cy);
+
+					int texX = rint(offsetPixX * cosine + offsetPixY * sine);
+					int texY = rint(-offsetPixX * sine + offsetPixY * cosine);
+
+					if (texX < 0 || physics_object.width <= texX || texY < 0 || physics_object.height <= texY) continue;
+
+					int idx = pixY * 512 + pixX;
+					uint32_t c2 = physics_object.colors.data()[physics_object.width * texY + texX];
+					if ((c2 >> 24) == 0) continue;
+					texBuffer[idx] = c2;
+				}
+		}
+	}
+	void update_tex()
+	{
+		tex.update((unsigned char*)texBuffer, 512, 512, 0, 0);
+	}
+	void update()
+	{
+		g_dirty = false;
+		redraw_mats();
+		redraw_physics();
+		update_tex();
+	}
+	const char* get(int x, int y)
+	{
+		return matNames[materials[512 * y + x] & 0x7f].mat.c_str();
+	}
+	void set(int x, int y, const char* material)
+	{
+		materials[512 * y + x] = IndexOrAdd(matNames, material);
+		g_dirty = true;
+		s_dirty = true;
+	}
+	void set(int x, int y, const char* material, uint32_t color)
+	{
+		materials[512 * y + x] = IndexOrAdd(matNames, material) | 0x80;
+		customColors[512 * y + x] = color;
+		g_dirty = true;
+		s_dirty = true;
+	}
 };
 
-ChunkSprite RenderChunk(const char* save00_path, int cx, int cy)
-{
-	char pathBuffer[200];
-	sprintf_s(pathBuffer, "%s/world/world_%i_%i.png_petri", save00_path, cx * 512, cy * 512);
-	std::ifstream fileExistenceStream(pathBuffer, std::ios::binary);
-	if (fileExistenceStream.fail())
-	{
-		//std::cerr << "File not found: " << pathBuffer << '\n';
-		return { cx, cy, NULL, sf::Texture() };
-	}
-	fileExistenceStream.close();
-
-	auto file_contents = read_compressed_file(pathBuffer);
-	auto data = file_contents.c_str();
-	auto data_end = data + file_contents.size();
-
-	auto version = read_be<std::uint32_t>(data);
-	auto width_q = read_be<std::uint32_t>(data + 4);
-	auto height_q = read_be<std::uint32_t>(data + 8);
-
-	if (version != 24 || width_q != 512 || height_q != 512)
-	{
-		std::cerr << "Unexpected header:\n";
-		std::cerr << "  version: " << version << '\n';
-		std::cerr << "  width?: " << width_q << '\n';
-		std::cerr << "  height?: " << height_q << '\n';
-		return { cx, cy, NULL, sf::Texture() };
-	}
-
-	auto world_cells_start = data + 12;
-
-	std::vector<std::uint8_t> hp_values_q(512 * 512);
-	std::memcpy(hp_values_q.data(), world_cells_start, 512 * 512);
-
-	auto material_names_start = world_cells_start + 512 * 512;
-	auto material_name_count = read_be<std::uint32_t>(material_names_start);
-	std::vector<std::string> material_names(material_name_count);
-
-	auto material_names_ptr = material_names_start + 4;
-	for (int i = 0; i < material_name_count; ++i)
-	{
-		auto size = read_be<std::uint32_t>(material_names_ptr);
-		material_names[i].resize(size);
-		std::memcpy((void*)material_names[i].data(), material_names_ptr + 4, size);
-		material_names_ptr += 4 + size;
-	}
-
-	int* material_indices = (int*)malloc(4 * material_name_count);
-	for (int i = 0; i < material_name_count; i++)
-		material_indices[i] = GetMaterialIndex(material_names[i].c_str());
-
-	auto [physics_objects_start, custom_world_colors] = read_vec_uint32(material_names_ptr);
-
-	auto physics_object_count = read_be<std::uint32_t>(physics_objects_start);
-	auto current_object = physics_objects_start + 4;
-
-	// assert version == 24
-	std::vector<PhysicsObject> physics_objects(physics_object_count);
-
-	for (auto i = 0; i < physics_object_count; ++i)
-	{
-		auto& into = physics_objects[i];
-
-		into.a = read_be<std::uint64_t>(current_object);
-		into.b = read_be<std::uint32_t>(current_object + 8);
-		into.x = read_be<float>(current_object + 12);
-		into.y = read_be<float>(current_object + 16);
-		into.rot_radians = read_be<float>(current_object + 20);
-		into.f = read_be<double>(current_object + 24);
-		into.g = read_be<double>(current_object + 32);
-		into.h = read_be<double>(current_object + 40);
-		into.i = read_be<double>(current_object + 48);
-		into.j = read_be<double>(current_object + 56);
-		into.k = read_be<bool>(current_object + 64);
-		into.l = read_be<bool>(current_object + 65);
-		into.m = read_be<bool>(current_object + 66);
-		into.n = read_be<bool>(current_object + 67);
-		into.o = read_be<bool>(current_object + 68);
-		into.z = read_be<float>(current_object + 69);
-		into.width = read_be<std::uint32_t>(current_object + 73);
-		into.height = read_be<std::uint32_t>(current_object + 77);
-
-		auto image_size = into.width * into.height;
-		into.colors.resize(image_size);
-
-		auto image_data = current_object + 81;
-		for (int j = 0; j < image_size; ++j)
-		{
-			into.colors[j] = read_be<std::uint32_t>(image_data);
-			image_data += 4;
-		}
-		current_object = image_data;
-	}
-
-	//auto unknown2_start = current_object;
-	//auto unknown2_count = read_be<std::uint32_t>(unknown2_start);
-
-	//std::cout << "Unhandled offset: " << current_object - data << '\n';
-	//std::cout << "Unhandled bytes: " << data_end - current_object << '\n';
-
-	/////////////////
-	// Write image //
-	/////////////////
-
-	uint32_t* RGBABuffer = (uint32_t*)malloc(4 * 512 * 512);
-	auto custom_color_it = custom_world_colors.begin();
-	for (int i = 0; i != 512 * 512; ++i)
-	{
-		auto posx = i % 512;
-		auto posy = i / 512;
-		auto material = hp_values_q[i] & (~0x80);
-		auto custom_color = (hp_values_q[i] & 0x80) != 0;
-		if (custom_color)
-		{
-			RGBABuffer[i] = *custom_color_it;
-			++custom_color_it;
-		}
-		else
-		{
-			Material m = allMaterials[material_indices[material]];
-			int gx = posx + cx * 512;
-			int gy = posy + cy * 512;
-			gx *= 6;
-			gy *= 6;
-			int texX = ((gx % 252) + 252) % 252;
-			int texY = ((gy % 252) + 252) % 252;
-			uint32_t color = m.tex[texY * 252 + texX];
-			RGBABuffer[i] = color;//swapEndianness(color);
-		}
-	}
-	for (const auto& physics_object : physics_objects)
-	{
-		int lx = rint(physics_object.x) - 512 * cx;
-		int ly = rint(physics_object.y) - 512 * cy;
-		int ux = lx;
-		int uy = ly;
-
-		float cosine = cosf(physics_object.rot_radians);
-		float sine = sinf(physics_object.rot_radians);
-
-		if (cosine > 0)
-		{
-			ux += physics_object.width * cosine;
-			uy += physics_object.height * cosine;
-		}
-		else
-		{
-			lx += physics_object.width * cosine;
-			ly += physics_object.height * cosine;
-		}
-
-		if (sine > 0)
-		{
-			lx -= physics_object.height * sine;
-			uy += physics_object.width * sine;
-		}
-		else
-		{
-			ux -= physics_object.height * sine;
-			ly += physics_object.width * sine;
-		}
-		lx = std::min(std::max(lx, 0), 511);
-		ly = std::min(std::max(ly, 0), 511);
-		ux = std::min(std::max(ux, 0), 511);
-		uy = std::min(std::max(uy, 0), 511);
-
-		for (int pixY = ly; pixY < uy; pixY++)
-			for (int pixX = lx; pixX < uy; pixX++)
-			{
-				float offsetPixX = pixX - (rintf(physics_object.x) - 512 * cx);
-				float offsetPixY = pixY - (rintf(physics_object.y) - 512 * cy);
-
-				int texX = rint(offsetPixX * cosine + offsetPixY * sine);
-				int texY = rint(-offsetPixX * sine + offsetPixY * cosine);
-
-				if (texX < 0 || physics_object.width <= texX || texY < 0 || physics_object.height <= texY) continue;
-
-				int idx = pixY * 512 + pixX;
-				uint32_t c = physics_object.colors.data()[physics_object.width * texY + texX];
-				if ((c >> 24) == 0) continue;
-				RGBABuffer[idx] = c;
-			}
-	}
-
-	sf::Texture world_texture;
-	world_texture.create(0x200, 0x200);
-	world_texture.update((unsigned char*)RGBABuffer, 512, 512, 0, 0);
-	free(material_indices);
-	printf("finished rendering chunk at (%i, %i)\n", cx, cy);
-	return { cx, cy, RGBABuffer, world_texture };
-}
-
-void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
+static void IteratePngPetris(const char* save00_path, std::vector<Chunk*>& outVec)
 {
 	WIN32_FIND_DATA fd;
 
@@ -311,25 +400,25 @@ void IteratePngPetris(const char* save00_path, std::vector<ChunkSprite>& outVec)
 				int py = atoi(buffer + secondUnderscore + 1);
 				int cx = px / 512;
 				int cy = py / 512;
-				outVec.emplace_back(RenderChunk(save00_path, cx, cy));
+				outVec.emplace_back(new Chunk(save00_path, cx, cy));
 			}
 		} while (::FindNextFile(hFind, &fd));
 		::FindClose(hFind);
 	}
 }
 
-void ExportMapImage(std::vector<ChunkSprite>& chunks)
+static void ExportMapImage(std::vector<Chunk*>& chunks)
 {
 	int minX = 10000;
 	int maxX = -10000;
 	int minY = 10000;
 	int maxY = -10000;
-	for (ChunkSprite& s : chunks)
+	for (Chunk* c : chunks)
 	{
-		if (s.cx < minX) minX = s.cx;
-		if (s.cx > maxX) maxX = s.cx;
-		if (s.cy < minY) minY = s.cy;
-		if (s.cy > maxY) maxY = s.cy;
+		if (c->cx < minX) minX = c->cx;
+		if (c->cx > maxX) maxX = c->cx;
+		if (c->cy < minY) minY = c->cy;
+		if (c->cy > maxY) maxY = c->cy;
 	}
 	size_t width = (maxX - minX + 1) * 512;
 	size_t height = (maxY - minY + 1) * 512;
@@ -340,17 +429,90 @@ void ExportMapImage(std::vector<ChunkSprite>& chunks)
 		return;
 	}
 	memset(buf, 0, 4 * width * height);
-	for (ChunkSprite& s : chunks)
+	for (Chunk* c : chunks)
 	{
-		size_t dx = s.cx - minX;
-		size_t dy = s.cy - minY;
+		size_t dx = c->cx - minX;
+		size_t dy = c->cy - minY;
 		uint32_t* rowStart = buf + (512 * dy * width + 512 * dx);
 		for (size_t i = 0; i < 512; i++)
 		{
-			memcpy(rowStart + i * width, s.backingBuffer + i * 512, 512 * 4);
+			memcpy(rowStart + i * width, c->texBuffer + i * 512, 512 * 4);
 		}
 	}
 	WriteImageRGBA("map.png", (uint8_t*)buf, width, height);
+}
+
+
+sf::Vector2f viewportCenter(512, 512);
+float zoomLevel = 1;
+
+static sf::Vector2f mouseLocal(sf::RenderWindow& window)
+{
+	return sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+}
+static sf::Vector2f localToGlobal(sf::Vector2f local)
+{
+	return local / zoomLevel + viewportCenter;
+}
+static sf::Vector2i roundGlobal(sf::Vector2f global)
+{
+	return { (int)floorf(global.x), (int)floorf(global.y) };
+}
+static sf::Vector2i globalToChunk(sf::Vector2i global)
+{
+	return { (int)floorf((float)global.x / 512), (int)floorf((float)global.y / 512) };
+}
+static sf::Vector2i globalToOffset(sf::Vector2i global)
+{
+	sf::Vector2i cc = globalToChunk(global);
+	return { global.x - 512 * cc.x, global.y - 512 * cc.y };
+}
+static Chunk* chunkIdx(std::vector<Chunk*> chunks, sf::Vector2i index)
+{
+	for (Chunk* chunk : chunks)
+	{
+		if (chunk->cx == index.x && chunk->cy == index.y)
+			return chunk;
+	}
+	return NULL;
+}
+
+static void set_circle(std::vector<Chunk*> chunks, sf::Vector2f center, float radius, const char* material)
+{
+	for (int dy = -radius - 1; dy < radius + 1; dy++)
+	{
+		for (int dx = -radius - 1; dx < radius + 1; dx++)
+		{
+			int x = center.x + dx;
+			int y = center.y + dy;
+			sf::Vector2f diff = sf::Vector2f(x + 0.5f, y + 0.5f) - center;
+			float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+			if (dist > radius) continue;
+
+			sf::Vector2i gPos = roundGlobal(sf::Vector2f((int)x, (int)y));
+			sf::Vector2i cPos = globalToChunk(gPos);
+			sf::Vector2i cOff = globalToOffset(gPos);
+			Chunk* chunk = chunkIdx(chunks, cPos);
+			if (chunk)
+			{
+				chunk->set(cOff.x, cOff.y, material);
+			}
+		}
+	}
+}
+static void drawTextAligned(const char* text, sf::Vector2f position, uint32_t size, int hAlign, int vAlign, sf::Font font, sf::RenderWindow& window)
+{
+	sf::Text t(text, font, size);
+	t.setPosition(position);
+	sf::FloatRect bounds = t.getGlobalBounds();
+	int xPos = position.x;
+	int yPos = position.y;
+	if (hAlign == 2) xPos = position.x - bounds.width;
+	else if (hAlign == 1) xPos = position.x - bounds.width * 0.5f;
+	if (vAlign == 2) yPos = position.y - bounds.height;
+	else if (vAlign == 1) yPos = position.y - bounds.height * 0.5f;
+	t.setPosition(xPos, yPos);
+	window.draw(t);
 }
 
 int main(int argc, char** argv)
@@ -377,15 +539,14 @@ int main(int argc, char** argv)
 	if (save00ExistenceStream.fail())
 	{
 		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with NoitaMapViewer <path-to-save00>\n";
-		_getch();
+		_kbhit();
 		return -1;
 	}
 	save00ExistenceStream.close();
 
-	//char pathBuffer[200];
-	//sprintf_s(pathBuffer, "%s/world/area_0.bin", save00_path);
-	//for (int i = 0; i < read_compressed_file(pathBuffer).length(); i++) printf("%c", ((char*)read_compressed_file(pathBuffer).c_str())[i]);
-	//printf("\n");
+	LoadMats("mats/");
+	std::vector<Chunk*> chunks;
+	IteratePngPetris(save00_path, chunks);
 
 	sf::Vector2f initial_display_sz(950.f, 800.f);
 	sf::RenderWindow window(
@@ -394,30 +555,32 @@ int main(int argc, char** argv)
 	);
 
 	window.setVerticalSyncEnabled(true);
-
 	auto handle_resize = [&](sf::Vector2f new_size) {
 		sf::View view(new_size / 2.f, new_size);
 		window.setView(view);
 	};
-
 	handle_resize(initial_display_sz);
 
-	LoadMats("mats/");
-	std::vector<ChunkSprite> chunks;
-	IteratePngPetris(save00_path, chunks);
+	sf::Font font = sf::Font();
+	font.loadFromFile("NoitaPixel.ttf");
 
-	sf::Vector2f viewportCenter(512, 512);
-
-	constexpr float scrollZoomSensitivity = 1.2f;
+	constexpr float scrollZoomSensitivity = 1.3f;
 	constexpr float keyZoomSensitivity = 1.05f;
 	constexpr float keyPanSensitivity = 15;
-
-	float zoomLevel = 1;
 
 	sf::Vector2f lastMousePos;
 	bool mouseDownLastFrame = false;
 	
-	bool tooltipEnabled = true;
+	int mode = 0;
+	bool tooltip = true;
+	bool keybinds = true;
+	bool outline = true;
+
+	bool matInput = false;
+	std::string matEntered;
+
+	const char* material = "gold";
+	float drawRadius = 2;
 
 	while (window.isOpen())
 	{
@@ -434,108 +597,250 @@ int main(int argc, char** argv)
 
 			if (event.type == sf::Event::MouseWheelMoved)
 			{
-				if (event.mouseWheel.delta == 1)
+				if (mode == 1 && sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
 				{
-					sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-					zoomLevel *= scrollZoomSensitivity;
-					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-					viewportCenter += delta;
+					drawRadius *= powf(scrollZoomSensitivity, event.mouseWheel.delta);
 				}
 				else
 				{
-					sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-					zoomLevel /= scrollZoomSensitivity;
-					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-					viewportCenter += delta;
+					if (event.mouseWheel.delta > 0)
+					{
+						sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+						sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+						zoomLevel *= scrollZoomSensitivity;
+						sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+						sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+						viewportCenter += delta;
+					}
+					else
+					{
+						sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+						sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+						zoomLevel /= scrollZoomSensitivity;
+						sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+						sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+						viewportCenter += delta;
+					}
+				}
+			}
+
+			if (event.type == sf::Event::TextEntered)
+			{
+				if (matInput)
+				{
+					char character = event.text.unicode;
+					if (character == 0x08)
+					{
+						if (matEntered.size() > 0) matEntered.erase(matEntered.size() - 1);
+						continue;
+					}
+					bool isNum = 0x30 <= character && character <= 0x39;
+					bool isLower = 0x61 <= character && character <= 0x7a;
+					bool isUpper = 0x41 <= character && character <= 0x5a;
+					if (isNum || isUpper || isLower || character == '_')
+					{
+						matEntered.push_back(character);
+						continue;
+					}
 				}
 			}
 
 			if (event.type == sf::Event::KeyPressed)
 			{
-				if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
+				if (matInput)
 				{
-					tooltipEnabled = !tooltipEnabled;
+					if (event.key.code == sf::Keyboard::Enter)
+					{
+						material = matEntered.c_str();
+						matInput = false;
+						continue;
+					}
 				}
-				else if (event.key.code == sf::Keyboard::S && event.key.control)
+				if (mode == 1 && event.key.code == sf::Keyboard::SemiColon && event.key.shift)
+				{
+					matInput = true;
+					matEntered.clear();
+				}
+				else if (event.key.code == sf::Keyboard::P && event.key.control)
 				{
 					printf("Saving map to map.png...\n");
 					ExportMapImage(chunks);
-					printf("Done!\n");
 				}
+				else if (event.key.code == sf::Keyboard::S && event.key.control)
+				{
+					for (Chunk* chunk : chunks)
+						if (chunk->s_dirty)
+							chunk->save();
+				}
+				else if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
+					tooltip = !tooltip;
+				else if (event.key.code == sf::Keyboard::Tab)
+					keybinds = !keybinds;
+				else if (event.key.code == sf::Keyboard::Q)
+					outline = !outline;
+				else if (event.key.code == sf::Keyboard::E && event.key.shift)
+					mode = 1;
+				else if (event.key.code == sf::Keyboard::V && event.key.shift)
+					mode = 0;
 			}
 		}
-		if (window.hasFocus())
+		if (window.hasFocus() && !matInput)
 		{
 			float actualPanSensitivity = keyPanSensitivity;
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) actualPanSensitivity *= 3;
 
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) && !sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) && !sf::Keyboard::isKeyPressed(sf::Keyboard::LSystem))
+			{
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
 
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal))
-			{
-				sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-				sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-				zoomLevel *= keyZoomSensitivity;
-				sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-				sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-				viewportCenter += delta;
-			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen))
-			{
-				sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-				sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-				zoomLevel /= keyZoomSensitivity;
-				sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-				sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-				viewportCenter += delta;
-			}
-
-			if (sf::Mouse::isButtonPressed(sf::Mouse::Left) || sf::Mouse::isButtonPressed(sf::Mouse::Right))
-			{
-				sf::Vector2f newMousePos = sf::Vector2f(sf::Mouse::getPosition());
-				if (mouseDownLastFrame)
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal))
 				{
-					sf::Vector2f posDiff = newMousePos - lastMousePos;
-					viewportCenter -= posDiff / zoomLevel;
+					sf::Vector2f distFromCenter = mouseLocal(window);
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel *= keyZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
 				}
-				lastMousePos = newMousePos;
-				mouseDownLastFrame = true;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen))
+				{
+					sf::Vector2f distFromCenter = mouseLocal(window);
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel /= keyZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
+				}
 			}
-			else mouseDownLastFrame = false;
+			if (mode == 0)
+			{
+				if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+				{
+					sf::Vector2f newMousePos = sf::Vector2f(sf::Mouse::getPosition());
+					if (mouseDownLastFrame)
+					{
+						sf::Vector2f posDiff = newMousePos - lastMousePos;
+						viewportCenter -= posDiff / zoomLevel;
+					}
+					lastMousePos = newMousePos;
+					mouseDownLastFrame = true;
+				}
+				else mouseDownLastFrame = false;
+			}
+			else if (mode == 1)
+			{
+				if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+				{
+					sf::Vector2f gPos = localToGlobal(mouseLocal(window));
+
+					if (mouseDownLastFrame)
+					{
+						sf::Vector2f diff = gPos - lastMousePos;
+						float len = sqrtf(diff.x * diff.x + diff.y * diff.y);
+						for (float offset = 0; offset < len; offset = fminf(offset + drawRadius / 4, len))
+							set_circle(chunks, gPos - diff * (offset / len), drawRadius, material);
+					}
+					else
+						set_circle(chunks, gPos, drawRadius, material);
+
+					lastMousePos = gPos;
+					mouseDownLastFrame = true;
+				}
+				else mouseDownLastFrame = false;
+
+				if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
+				{
+					sf::Vector2i gPos = roundGlobal(localToGlobal(mouseLocal(window)));
+					sf::Vector2i cPos = globalToChunk(gPos);
+					sf::Vector2i cOff = globalToOffset(gPos);
+					Chunk* chunk = chunkIdx(chunks, cPos);
+					if (chunk)
+					{
+						material = chunk->get(cOff.x, cOff.y);
+					}
+				}
+			}
 		}
 
 		window.clear(sf::Color::Black);
 
 		sf::Vector2f screenSize = sf::Vector2f(window.getSize());
 		sf::Vector2f topLeftOffset = screenSize * 0.5f;
-		for (ChunkSprite& chunk : chunks)
+		for (Chunk* chunk : chunks)
 		{
+			if (chunk->g_dirty) chunk->update();
 			sf::Sprite s;
-			s.setTexture(chunk.tex);
+			s.setTexture(chunk->tex);
 			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((chunk.cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk.cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			s.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
 
-		if (tooltipEnabled)
+		if (tooltip)
 		{
-
-			sf::Vector2f mPosPixelLocal = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-			sf::Vector2f mPosPixelAbsolute = mPosPixelLocal / zoomLevel + viewportCenter;
-			char tooltip[64];
-			sprintf_s(tooltip, "(%i, %i)", (int)mPosPixelAbsolute.x, (int)mPosPixelAbsolute.y);
-			sf::Font font = sf::Font();
-			font.loadFromFile("NoitaPixel.ttf");
-			sf::Text text = sf::Text(sf::String((const char*)tooltip), font);
-			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 10));
+			sf::Vector2i gPos = roundGlobal(localToGlobal(mouseLocal(window)));
+			sf::Vector2i cPos = globalToChunk(gPos);
+			sf::Vector2i cOff = globalToOffset(gPos);
+			int matIdx = -1;
+			Chunk* chunk = chunkIdx(chunks, cPos);
+			if (chunk)
+				matIdx = chunk->matNames[chunk->materials[512 * cOff.y + cOff.x] & 0x7f].idx;
+			
+			char tooltipText[255];
+			sprintf_s(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y, matIdx >= 0 ? allMaterials[matIdx].name : "");
+			sf::Text text = sf::Text(sf::String((const char*)tooltipText), font);
+			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 2));
 			window.draw(text);
+		}
+
+		if (mode == 1 && outline)
+		{
+			sf::CircleShape circle(drawRadius * zoomLevel);
+			circle.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(drawRadius * zoomLevel,drawRadius * zoomLevel));
+			circle.setFillColor(sf::Color::Transparent);
+			circle.setOutlineThickness(1);
+			circle.setOutlineColor(sf::Color::White);
+			window.draw(circle);
+		}
+
+		if (mode == 1)
+		{
+			char matBuffer[128];
+			if (matInput)
+				sprintf_s(matBuffer, "Material: [%s]", matEntered.c_str());
+			else
+				sprintf_s(matBuffer, "Material: %s", material);
+			drawTextAligned(matBuffer, sf::Vector2f(window.getSize().x / 2, window.getSize().y - 50), 48, 1, 2, font, window);
+		}
+
+		if (keybinds)
+		{
+			drawTextAligned(mode == 1 ? "[[ Edit Mode ]]" : "[[ View Mode ]]", sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
+
+			drawTextAligned("\
+== Global ==\n\
+WASD/Arrow Keys - Camera Panning\n\
+Scroll/+- - Zoom\n\
+SHIFT+V - Switch to View Mode\n\
+SHIFT+E - Switch to Edit Mode\n\
+CTRL+P - Export to PNG\n\
+CTRL+S - Save Edited Chunks\n\
+ALT - Toggle Tooltips\n\
+Tab - Toggle this display\n\
+\n\
+== View Mode ==\n\
+LMB - Camera Panning\n\
+\n\
+== Edit Mode ==\n\
+LMB - Draw Material\n\
+RMB - Copy Material\n\
+Q - Toggle Outline\n\
+SHIFT+Scroll - Change Draw Radius\n\
+SHIFT+; ... Enter - Choose Material by Name\n\
+", sf::Vector2f(10, 0), 30, 0, 0, font, window);
 		}
 
 		window.display();

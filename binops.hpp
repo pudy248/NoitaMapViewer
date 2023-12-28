@@ -1,11 +1,11 @@
-#ifndef NOITA_SETTINGS_BINOPS_HPP
-#define NOITA_SETTINGS_BINOPS_HPP
-
+#pragma once
 #include <cstdint>
 #include <cstring>
 
 template<class T> T read_le(const void*);
+template<class T> void write_le(std::ostream&, const T);
 template<class T> T read_be(const void*);
+template<class T> void write_be(std::ostream&, const T);
 
 template<>
 inline std::uint32_t read_be<std::uint32_t>(const void* ptr)
@@ -83,4 +83,47 @@ inline bool read_be<bool>(const void* ptr)
     return ((const char*)ptr)[0] != 0;
 }
 
-#endif // Header guard
+template<>
+inline void write_le<std::uint32_t>(std::ostream& s, uint32_t val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 4; i++) s << it2[i];
+}
+
+template<>
+inline void write_le<std::uint64_t>(std::ostream& s, uint64_t val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 8; i++) s << it2[i];
+}
+
+template<>
+inline void write_be<std::uint32_t>(std::ostream& s, uint32_t val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 4; i++) s << it2[3 - i];
+}
+template<>
+inline void write_be<std::uint64_t>(std::ostream& s, uint64_t val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 8; i++) s << it2[7 - i];
+}
+template<>
+inline void write_be<double>(std::ostream& s, double val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 8; i++) s << it2[7 - i];
+}
+template<>
+inline void write_be<float>(std::ostream& s, float val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    for (int i = 0; i < 4; i++) s << it2[3 - i];
+}
+template<>
+inline void write_be<bool>(std::ostream& s, bool val)
+{
+    auto it2 = reinterpret_cast<const std::uint8_t*>(&val);
+    s << *it2;
+}
