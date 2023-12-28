@@ -1,13 +1,7 @@
 # About
-Noita Map Viewer generates an image of your world based on data from your save, with no ingame mods or settings fiddling required, unlike MapCap. 
-Planned features include async rendering of chunks to bypass the startup loading time, filtering for specific materials, and the ability to paint materials on the map and save them to your Noita save file.
-
-Controls: 
-- WASD/Arrow Keys - Camera panning
-- Scroll Wheel/+- - Zoom
-- Shift - Faster panning
-- Alt - Toggle coordinate tooltip
-- CTRL+S - Save map as image
+Noita Map Viewer generates an image of your world based on data from your save, with no ingame mods or settings fiddling required, unlike MapCap.
+Now includes map painting! Switch to edit mode with Shift+E, then start painting away! Press Ctrl+S to save the edited chunks back to your save file.
+Planned features include async rendering of chunks to bypass the startup loading time and filtering for specific materials.
 
 # Usage
 Simply extract the .zip from the most recent release (or build the program yourself if you're on Linux), and run the executable.
@@ -18,6 +12,8 @@ Linux users also have to build the project from scratch as no linux release is p
 
 # Credits
 dexterCD - Reverse engineered all of the .png_petri format before I got to it, and did a much better job than I probably could have. Responsible for a majority of the save loading for this tool
+
+charclr - Stoked a healthy sense of competition that convinced me to update at a reasonable rate.
 
 Heinermann - His wiki tools were invaluable in generating colors for every material.
 
