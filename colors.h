@@ -30,7 +30,7 @@ struct Material
 	uint32_t* tex;
 };
 
-constexpr int numMats = 444;
+constexpr int numMats = 457;
 Material allMaterials[numMats];
 
 Material LoadMaterial(const char* path, char* outputStr)

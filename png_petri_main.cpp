@@ -91,6 +91,7 @@ struct Chunk
 	int cy;
 	bool g_dirty = false;
 	bool s_dirty = false;
+	bool marked_del = false;
 	std::string cpath;
 	std::vector<MatIdx> matNames;
 	uint8_t materials[512 * 512];
@@ -189,8 +190,7 @@ struct Chunk
 
 		redraw_mats();
 		redraw_physics();
-
-		printf("finished loading chunk at (%i, %i)\n", cx, cy);
+		//printf("finished loading chunk at (%i, %i)\n", cx, cy);
 	}
 
 	void save()
@@ -249,6 +249,15 @@ struct Chunk
 		write_compressed_file(cpath.c_str(), s.str());
 
 		printf("finished saving chunk at (%i, %i)\n", cx, cy);
+	}
+	void destroy(const char* save00_path)
+	{
+		char buffer[MAX_PATH];
+		remove(cpath.c_str());
+		sprintf_s(buffer, "%s/world/area_%i.bin", save00_path, cy * 2000 + cx);
+		remove(buffer);
+		sprintf_s(buffer, "%s/world/entities_%i.bin", save00_path, cy * 2000 + cx);
+		remove(buffer);
 	}
 
 	void redraw_mats()
@@ -426,7 +435,7 @@ static void ThreadLoadChunks(int tIdx, int tStride, std::vector<PetriPath> paths
 	return;
 }
 
-static void ExportMapImage(std::vector<Chunk*>& chunks)
+static void ExportMapImage(std::vector<Chunk*>& chunks, int downscale = 2)
 {
 	int minX = 10000;
 	int maxX = -10000;
@@ -441,24 +450,27 @@ static void ExportMapImage(std::vector<Chunk*>& chunks)
 	}
 	size_t width = (maxX - minX + 1) * 512;
 	size_t height = (maxY - minY + 1) * 512;
-	uint32_t* buf = (uint32_t*)malloc(4 * width * height);
+	uint32_t* buf = (uint32_t*)malloc(4 * width * height / (downscale * downscale));
 	if (!buf)
 	{
 		printf("Map is too big to save! Aborting...\n");
 		return;
 	}
-	memset(buf, 0, 4 * width * height);
+	memset(buf, 0, 4 * width * height / (downscale * downscale));
 	for (Chunk* c : chunks)
 	{
 		size_t dx = c->cx - minX;
 		size_t dy = c->cy - minY;
-		uint32_t* rowStart = buf + (512 * dy * width + 512 * dx);
-		for (size_t i = 0; i < 512; i++)
+		for (size_t y = 0; y < 512; y += downscale)
 		{
-			memcpy(rowStart + i * width, c->texBuffer + i * 512, 512 * 4);
+			uint32_t* rowStart = buf + ((512 * dy + y) * width / downscale + 512 * dx / downscale);
+			for (size_t x = 0; x < 512; x += downscale)
+			{
+				rowStart[x / downscale] = c->texBuffer[y * 512 + x];
+			}
 		}
 	}
-	WriteImageRGBA("map.png", (uint8_t*)buf, width, height);
+	WriteImageRGBA("map.png", (uint8_t*)buf, width / downscale, height / downscale);
 }
 
 sf::Vector2f viewportCenter(512, 512);
@@ -700,11 +712,21 @@ int main(int argc, char** argv)
 					printf("Saving map to map.png...\n");
 					ExportMapImage(chunks);
 				}
-				else if (event.key.code == sf::Keyboard::S && event.key.control)
+				else if (mode == 1 && event.key.code == sf::Keyboard::S && event.key.control)
 				{
 					for (Chunk* chunk : chunks)
 						if (chunk->s_dirty)
 							chunk->save();
+				}
+				else if (mode == 2 && event.key.code == sf::Keyboard::S && event.key.control)
+				{
+					for (int i = 0; i < chunks.size(); i++)
+						if (chunks[i]->marked_del)
+						{
+							chunks[i]->destroy(save00_path);
+							chunks.erase(chunks.begin() + i);
+							i--;
+						}
 				}
 				else if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
 					tooltip = !tooltip;
@@ -712,10 +734,24 @@ int main(int argc, char** argv)
 					keybinds = !keybinds;
 				else if (event.key.code == sf::Keyboard::Q)
 					outline = !outline;
-				else if (event.key.code == sf::Keyboard::E && event.key.shift)
-					mode = 1;
 				else if (event.key.code == sf::Keyboard::V && event.key.shift)
 					mode = 0;
+				else if (event.key.code == sf::Keyboard::E && event.key.shift)
+					mode = 1;
+				else if (event.key.code == sf::Keyboard::R && event.key.shift)
+					mode = 2;
+			}
+		
+			if (event.type == sf::Event::MouseButtonPressed)
+			{
+				if (mode == 2 && event.mouseButton.button == sf::Mouse::Right)
+				{
+					sf::Vector2i gPos = roundGlobal(localToGlobal(mouseLocal(window)));
+					sf::Vector2i c = globalToChunk(gPos);
+					Chunk* chunk = chunkIdx(chunks, c);
+					if (chunk)
+						chunk->marked_del = !chunk->marked_del;
+				}
 			}
 		}
 		if (window.hasFocus() && !matInput)
@@ -749,7 +785,7 @@ int main(int argc, char** argv)
 					viewportCenter += delta;
 				}
 			}
-			if (mode == 0)
+			if (mode == 0 || mode == 2)
 			{
 				if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
 				{
@@ -812,6 +848,18 @@ int main(int argc, char** argv)
 			s.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
+		for (Chunk* chunk : chunks)
+		{
+			if (mode == 2 && chunk->marked_del)
+			{
+				sf::RectangleShape r(sf::Vector2f(512 * zoomLevel, 512 * zoomLevel));
+				r.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+				r.setFillColor(sf::Color::Transparent);
+				r.setOutlineThickness(1);
+				r.setOutlineColor(sf::Color::Red);
+				window.draw(r);
+			}
+		}
 
 		if (tooltip)
 		{
@@ -852,7 +900,12 @@ int main(int argc, char** argv)
 
 		if (keybinds)
 		{
-			drawTextAligned(mode == 1 ? "[[ Edit Mode ]]" : "[[ View Mode ]]", sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
+			const char* modeNames[] = {
+				"[[ View Mode ]]",
+				"[[ Edit Mode ]]",
+				"[[ Delete Mode]]"
+			};
+			drawTextAligned(modeNames[mode], sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
 
 			drawTextAligned("\
 == Global ==\n\
@@ -860,8 +913,8 @@ WASD/Arrow Keys - Camera Panning\n\
 Scroll/+- - Zoom\n\
 SHIFT+V - Switch to View Mode\n\
 SHIFT+E - Switch to Edit Mode\n\
+SHIFT+R - Switch to Delete Mode\n\
 CTRL+P - Export to PNG\n\
-CTRL+S - Save Edited Chunks\n\
 ALT - Toggle Tooltips\n\
 Tab - Toggle this display\n\
 \n\
@@ -874,6 +927,12 @@ RMB - Copy Material\n\
 Q - Toggle Outline\n\
 SHIFT+Scroll - Change Draw Radius\n\
 SHIFT+; ... Enter - Choose Material by Name\n\
+CTRL+S - Save Edited Chunks\n\
+\n\
+== Delete Mode ==\n\
+LMB - Camera Panning\n\
+RMB - Mark Chunk for Deletion\n\
+CTRL+S - Delete Marked Chunks\n\
 ", sf::Vector2f(10, 0), 30, 0, 0, font, window);
 		}
 
