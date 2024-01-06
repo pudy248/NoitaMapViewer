@@ -448,29 +448,30 @@ static void ExportMapImage(std::vector<Chunk*>& chunks, int downscale = 2)
 		if (c->cy < minY) minY = c->cy;
 		if (c->cy > maxY) maxY = c->cy;
 	}
-	size_t width = (maxX - minX + 1) * 512;
-	size_t height = (maxY - minY + 1) * 512;
-	uint32_t* buf = (uint32_t*)malloc(4 * width * height / (downscale * downscale));
-	if (!buf)
+	size_t width = (maxX - minX + 1) * 512 / downscale;
+	size_t height = (maxY - minY + 1) * 512 / downscale;
+	png_byte** rows = (png_byte**)malloc(sizeof(png_byte*) * height);
+	for (int y = 0; y < height; y++)
 	{
-		printf("Map is too big to save! Aborting...\n");
-		return;
+		rows[y] = (png_byte*)malloc(4 * width);
+		memset(rows[y], 0, 4 * width);
 	}
-	memset(buf, 0, 4 * width * height / (downscale * downscale));
+	
 	for (Chunk* c : chunks)
 	{
-		size_t dx = c->cx - minX;
-		size_t dy = c->cy - minY;
-		for (size_t y = 0; y < 512; y += downscale)
+		size_t dx = (c->cx - minX) * 512;
+		size_t dy = (c->cy - minY) * 512;
+		for (size_t py = 0; py < 512; py += downscale)
 		{
-			uint32_t* rowStart = buf + ((512 * dy + y) * width / downscale + 512 * dx / downscale);
-			for (size_t x = 0; x < 512; x += downscale)
+			size_t y = (dy + py) / downscale;
+			for (size_t px = 0; px < 512; px += downscale)
 			{
-				rowStart[x / downscale] = c->texBuffer[y * 512 + x];
+				size_t x = (dx + px) / downscale;
+				((uint32_t**)rows)[y][x] = c->texBuffer[py * 512 + px];
 			}
 		}
 	}
-	WriteImageRGBA("map.png", (uint8_t*)buf, width / downscale, height / downscale);
+	WriteImageRows("map.png", rows, width, height);
 }
 
 sf::Vector2f viewportCenter(512, 512);
@@ -710,7 +711,7 @@ int main(int argc, char** argv)
 				else if (event.key.code == sf::Keyboard::P && event.key.control)
 				{
 					printf("Saving map to map.png...\n");
-					ExportMapImage(chunks);
+					ExportMapImage(chunks, event.key.shift ? 1: 4);
 				}
 				else if (mode == 1 && event.key.code == sf::Keyboard::S && event.key.control)
 				{
@@ -915,6 +916,7 @@ SHIFT+V - Switch to View Mode\n\
 SHIFT+E - Switch to Edit Mode\n\
 SHIFT+R - Switch to Delete Mode\n\
 CTRL+P - Export to PNG\n\
+CTRL+SHIFT+P - Export to HD PNG\n\
 ALT - Toggle Tooltips\n\
 Tab - Toggle this display\n\
 \n\
