@@ -4,11 +4,9 @@ Now includes map painting! Switch to edit mode with Shift+E, then start painting
 Planned features include async rendering of chunks to bypass the startup loading time and filtering for specific materials.
 
 # Usage
-Simply extract the .zip from the most recent release (or build the program yourself if you're on Linux), and run the executable.
-For Windows users, the program will attempt to automatically locate your save, although you can pass an alternate directory to /save00/ as the first command line argument.
-Linux users always need to use the argument to provide a path to save00, since the directory can vary considerably.
-
-Linux users also have to build the project from scratch as no linux release is provided at the moment. Prerequisites are fastlz, libpng, and sfml. If you can't get it to work, I might be able to help you but I am not a linuxer so you may be on your own.
+Simply extract the .zip from the most recent release, and run the executable.
+For Windows users, the program will attempt to automatically locate your save, although you can pass an alternate directory to /save00/ as the first command line argument.  
+Linux users will have to run the command using Noitas wine prefix. You usually don't need to install wine seperately, as you can use the same Proton installation that steam uses for running Noita on linux in the first place: `WINEPREFIX=~/.local/share/Steam/steamapps/compatdata/881100/pfx ~/.local/share/Steam/steamapps/common/<Proton Version>/dist/bin/wine64 NoitaMapViewer.exe`.
 
 # Credits
 dexterCD - Reverse engineered all of the .png_petri format before I got to it, and did a much better job than I probably could have. Responsible for a majority of the save loading for this tool
