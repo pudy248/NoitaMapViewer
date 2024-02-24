@@ -134,10 +134,12 @@
   <ItemGroup>
     <ClInclude Include="binops.hpp" />
     <ClInclude Include="colors.h" />
+    <ClInclude Include="fastlz.h" />
     <ClInclude Include="pngutils.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="fastlz.c" />
     <ClCompile Include="png_petri_main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

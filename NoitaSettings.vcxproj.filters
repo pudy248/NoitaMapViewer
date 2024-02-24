@@ -5,8 +5,10 @@
     <ClInclude Include="binops.hpp" />
     <ClInclude Include="colors.h" />
     <ClInclude Include="pngutils.h" />
+    <ClInclude Include="fastlz.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="png_petri_main.cpp" />
+    <ClCompile Include="fastlz.c" />
   </ItemGroup>
 </Project>
