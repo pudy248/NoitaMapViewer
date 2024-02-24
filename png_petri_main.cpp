@@ -8,7 +8,11 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#ifdef _MSC_VER
 #include <conio.h>
+#else
+
+#endif
 
 #include <SFML/Graphics.hpp>
 
@@ -37,23 +41,60 @@ struct PhysicsObject {
 	std::uint32_t height;
 	std::vector<std::uint32_t> colors;
 };
-const float degrees_in_radians = 57.2957795131f;
-struct read_vec_uint32_result {
-	const char* ptr;
-	std::vector<std::uint32_t> data;
-};
-static read_vec_uint32_result read_vec_uint32(const char* ptr)
-{
-	auto count = read_be<std::uint32_t>(ptr);
-	std::vector<std::uint32_t> result(count);
 
-	ptr += 4;
-	for (auto& out : result) {
-		out = read_be<std::uint32_t>(ptr);
-		ptr += 4;
+struct StreaminfoBackground {
+	float a;
+	std::uint32_t b;
+	std::uint32_t count;
+	float x;
+	float y;
+	std::string path;
+	StreaminfoBackground(const char*& ptr) {
+		a = read_be<float>(ptr);
+		b = read_be<std::uint32_t>(ptr);
+		count = read_be<std::uint32_t>(ptr);
+		x = read_be<float>(ptr);
+		y = read_be<float>(ptr);
+		path = read_be<std::string>(ptr);
+	}
+};
+
+void ParseStreaminfo(const char* path) {
+	std::string file_contents = read_compressed_file(path);
+	const char* data = file_contents.c_str();
+	const char* data_end = data + file_contents.size();
+
+	uint32_t version = read_be<std::uint32_t>(data);
+	uint32_t unk1 = read_be<std::uint32_t>(data);
+	uint32_t playtime_frames = read_be<std::uint32_t>(data);
+	uint32_t unk3 = read_be<std::uint32_t>(data);
+
+	if (version != 24) {
+		std::cerr << "Unexpected header:\n";
+		std::cerr << "  version: " << version << '\n';
+		std::cerr << "  UNK1: " << unk1 << '\n';
+		std::cerr << "  Frame counter: " << playtime_frames << '\n';
+		std::cerr << "  UNK3: " << unk3 << '\n';
+		exit(-1);
 	}
 
-	return {ptr, result};
+
+	std::vector<StreaminfoBackground> bgs;
+
+	//TODO finish!
+}
+
+const float degrees_in_radians = 57.2957795131f;
+template <typename T> static std::vector<T> read_vec(const char*& ptr)
+{
+	auto count = read_be<std::uint32_t>(ptr);
+	std::vector<T> result(count);
+
+	for (auto& out : result) {
+		out = read_be<T>(ptr);
+	}
+
+	return result;
 }
 
 static int GetMaterialIndex(const char* name)
@@ -106,12 +147,12 @@ struct Chunk
 	{
 		cpath = std::string(path);
 		std::string file_contents = read_compressed_file(path);
-		const char* data = file_contents.c_str();
-		const char* data_end = data + file_contents.size();
+		const char* ptr = file_contents.c_str();
+		const char* data_end = ptr + file_contents.size();
 
-		uint32_t version = read_be<std::uint32_t>(data);
-		uint32_t width_q = read_be<std::uint32_t>(data + 4);
-		uint32_t height_q = read_be<std::uint32_t>(data + 8);
+		uint32_t version = read_be<std::uint32_t>(ptr);
+		uint32_t width_q = read_be<std::uint32_t>(ptr);
+		uint32_t height_q = read_be<std::uint32_t>(ptr);
 
 		if (version != 24 || width_q != 512 || height_q != 512)
 		{
@@ -122,22 +163,18 @@ struct Chunk
 			exit(-1);
 		}
 
-		const char* world_cells_start = data + 12;
-		std::memcpy(materials, world_cells_start, 512 * 512);
+		std::memcpy(materials, ptr, 512 * 512);
+		ptr += 512 * 512;
 
-		const char* material_names_start = world_cells_start + 512 * 512;
-		uint32_t material_name_count = read_be<std::uint32_t>(material_names_start);
+		uint32_t material_name_count = read_be<std::uint32_t>(ptr);
 
-		const char* material_names_ptr = material_names_start + 4;
 		for (int i = 0; i < material_name_count; ++i)
 		{
-			uint32_t size = read_be<std::uint32_t>(material_names_ptr);
-			std::string s = std::string(material_names_ptr + 4, size);
+			std::string s = read_be<std::string>(ptr);
 			matNames.push_back(MatIdx(s, GetMaterialIndex(s.c_str())));
-			material_names_ptr += 4 + size;
 		}
 
-		auto [physics_objects_start, custom_world_colors] = read_vec_uint32(material_names_ptr);
+		std::vector<std::uint32_t> custom_world_colors = read_vec<std::uint32_t>(ptr);
 
 		int ccIt = 0;
 		for (int i = 0; i < 512 * 512; i++)
@@ -149,42 +186,38 @@ struct Chunk
 			else customColors[i] = 0;
 		}
 
-		auto physics_object_count = read_be<std::uint32_t>(physics_objects_start);
-		auto current_object = physics_objects_start + 4;
+		std::uint32_t physics_object_count = read_be<std::uint32_t>(ptr);
 
 		for (auto i = 0; i < physics_object_count; ++i)
 		{
 			PhysicsObject into;
 
-			into.a = read_be<std::uint64_t>(current_object);
-			into.b = read_be<std::uint32_t>(current_object + 8);
-			into.x = read_be<float>(current_object + 12);
-			into.y = read_be<float>(current_object + 16);
-			into.rot_radians = read_be<float>(current_object + 20);
-			into.f = read_be<double>(current_object + 24);
-			into.g = read_be<double>(current_object + 32);
-			into.h = read_be<double>(current_object + 40);
-			into.i = read_be<double>(current_object + 48);
-			into.j = read_be<double>(current_object + 56);
-			into.k = read_be<bool>(current_object + 64);
-			into.l = read_be<bool>(current_object + 65);
-			into.m = read_be<bool>(current_object + 66);
-			into.n = read_be<bool>(current_object + 67);
-			into.o = read_be<bool>(current_object + 68);
-			into.z = read_be<float>(current_object + 69);
-			into.width = read_be<std::uint32_t>(current_object + 73);
-			into.height = read_be<std::uint32_t>(current_object + 77);
+			into.a = read_be<std::uint64_t>(ptr);
+			into.b = read_be<std::uint32_t>(ptr);
+			into.x = read_be<float>(ptr);
+			into.y = read_be<float>(ptr);
+			into.rot_radians = read_be<float>(ptr);
+			into.f = read_be<double>(ptr);
+			into.g = read_be<double>(ptr);
+			into.h = read_be<double>(ptr);
+			into.i = read_be<double>(ptr);
+			into.j = read_be<double>(ptr);
+			into.k = read_be<bool>(ptr);
+			into.l = read_be<bool>(ptr);
+			into.m = read_be<bool>(ptr);
+			into.n = read_be<bool>(ptr);
+			into.o = read_be<bool>(ptr);
+			into.z = read_be<float>(ptr);
+			into.width = read_be<std::uint32_t>(ptr);
+			into.height = read_be<std::uint32_t>(ptr);
 
 			auto image_size = into.width * into.height;
 			into.colors.resize(image_size);
 
-			auto image_data = current_object + 81;
 			for (int j = 0; j < image_size; ++j)
 			{
-				into.colors[j] = read_be<std::uint32_t>(image_data);
-				image_data += 4;
+				into.colors[j] = read_be<std::uint32_t>(ptr);
 			}
-			current_object = image_data;
 			physObjs.push_back(into);
 		}
 

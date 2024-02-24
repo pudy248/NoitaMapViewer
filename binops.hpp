@@ -2,38 +2,41 @@
 #include <cstdint>
 #include <cstring>
 
-template<class T> T read_le(const void*);
-template<class T> void write_le(std::ostream&, const T);
-template<class T> T read_be(const void*);
-template<class T> void write_be(std::ostream&, const T);
+template<typename T> T read_le(const char*&);
+template<typename T> void write_le(std::ostream&, const T);
+template<typename T> T read_be(const char*&);
+template<typename T> void write_be(std::ostream&, const T);
 
 template<>
-inline std::uint32_t read_be<std::uint32_t>(const void* ptr)
-{
+inline std::uint32_t read_be(const char*& ptr) {
     auto it = reinterpret_cast<const std::uint8_t*>(ptr);
-    return
+    std::uint32_t r =
           (std::uint32_t)it[3] << 0
         | (std::uint32_t)it[2] << 8
         | (std::uint32_t)it[1] << 16
         | (std::uint32_t)it[0] << 24;
+    *(uintptr_t*)&ptr += 4;
+    return r;
 }
 
 template<>
-inline std::uint32_t read_le<std::uint32_t>(const void* ptr)
+inline std::uint32_t read_le(const char*& ptr)
 {
     auto it = reinterpret_cast<const std::uint8_t*>(ptr);
-    return
+    std::uint32_t r =
           (std::uint32_t)it[0] << 0
         | (std::uint32_t)it[1] << 8
         | (std::uint32_t)it[2] << 16
         | (std::uint32_t)it[3] << 24;
+    *(uintptr_t*)&ptr += 4;
+    return r;
 }
 
 template<>
-inline std::uint64_t read_be<std::uint64_t>(const void* ptr)
+inline std::uint64_t read_be(const char*& ptr)
 {
     auto it = reinterpret_cast<const std::uint8_t*>(ptr);
-    return
+    std::uint64_t r =
           (std::uint64_t)it[7] << 0
         | (std::uint64_t)it[6] << 8
         | (std::uint64_t)it[5] << 16
@@ -42,13 +45,15 @@ inline std::uint64_t read_be<std::uint64_t>(const void* ptr)
         | (std::uint64_t)it[2] << 40
         | (std::uint64_t)it[1] << 48
         | (std::uint64_t)it[0] << 56;
+    *(uintptr_t*)&ptr += 8;
+    return r;
 }
 
 template<>
-inline std::uint64_t read_le<std::uint64_t>(const void* ptr)
+inline std::uint64_t read_le(const char*& ptr)
 {
     auto it = reinterpret_cast<const std::uint8_t*>(ptr);
-    return
+    std::uint64_t r =
           (std::uint64_t)it[0] << 0
         | (std::uint64_t)it[1] << 8
         | (std::uint64_t)it[2] << 16
@@ -57,10 +62,12 @@ inline std::uint64_t read_le<std::uint64_t>(const void* ptr)
         | (std::uint64_t)it[5] << 40
         | (std::uint64_t)it[6] << 48
         | (std::uint64_t)it[7] << 56;
+    *(uintptr_t*)&ptr += 8;
+    return r;
 }
 
 template<>
-inline float read_be<float>(const void* ptr)
+inline float read_be(const char*& ptr)
 {
     float value;
     auto data = read_be<std::uint32_t>(ptr);
@@ -69,7 +76,7 @@ inline float read_be<float>(const void* ptr)
 }
 
 template<>
-inline double read_be<double>(const void* ptr)
+inline double read_be(const char*& ptr)
 {
     double value;
     auto data = read_be<std::uint64_t>(ptr);
@@ -78,9 +85,19 @@ inline double read_be<double>(const void* ptr)
 }
 
 template<>
-inline bool read_be<bool>(const void* ptr)
+inline bool read_be(const char*& ptr)
 {
-    return ((const char*)ptr)[0] != 0;
+    bool b = ((const char*)ptr)[0] != 0;
+    *(uintptr_t*)&ptr += 1;
+    return b;
+}
+
+template<>
+inline std::string read_be(const char*& ptr) {
+    std::uint32_t size = read_be<std::uint32_t>(ptr);
+    std::string s = std::string(ptr, size);
+    *(uintptr_t*)&ptr += size;
+    return s;
 }
 
 template<>

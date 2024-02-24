@@ -24,6 +24,7 @@ std::string read_file(const char* path)
 std::string read_compressed_file(const char* path)
 {
     std::string compressed = read_file(path);
+    const char* compressed_ptr = compressed.data();
 
     if (compressed.size() < 8)
     {
@@ -31,8 +32,8 @@ std::string read_compressed_file(const char* path)
         return std::string("");
     }
 
-    auto compressed_size = read_le<std::uint32_t>(compressed.data());
-    auto decompressed_size = read_le<std::uint32_t>(compressed.data() + 4);
+    auto compressed_size = read_le<std::uint32_t>(compressed_ptr);
+    auto decompressed_size = read_le<std::uint32_t>(compressed_ptr);
 
     if (compressed.size() - 8 != compressed_size)
     {
