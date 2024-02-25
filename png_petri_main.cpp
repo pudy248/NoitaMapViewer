@@ -56,33 +56,92 @@ struct StreaminfoBackground {
 		x = read_be<float>(ptr);
 		y = read_be<float>(ptr);
 		path = read_be<std::string>(ptr);
+
+		tex.loadFromFile(path);
 	}
+	sf::Texture tex;
 };
 
-void ParseStreaminfo(const char* path) {
+struct PixelsceneBackground {
+	int x;
+	int y;
+	std::string mat;
+	std::string visual;
+	std::string bg;
+
+	bool exists;
+
+	PixelsceneBackground(const char*& ptr) {
+		x = read_be<std::uint32_t>(ptr);
+		y = read_be<std::uint32_t>(ptr);
+		mat = read_be<std::string>(ptr);
+		visual = read_be<std::string>(ptr);
+		bg = read_be<std::string>(ptr);
+		ptr += 6;
+		read_be<std::string>(ptr);
+		ptr += 5;
+		if (read_be<bool>(ptr))
+			ptr += 16;
+
+		exists = bg.size();
+		if (exists) {
+			tex.loadFromFile(bg);
+		}
+	}
+	sf::Texture tex;
+};
+
+std::vector<StreaminfoBackground*> ParseStreaminfo(const char* path) {
 	std::string file_contents = read_compressed_file(path);
 	const char* data = file_contents.c_str();
 	const char* data_end = data + file_contents.size();
 
 	uint32_t version = read_be<std::uint32_t>(data);
-	uint32_t unk1 = read_be<std::uint32_t>(data);
+	uint32_t seed = read_be<std::uint32_t>(data);
 	uint32_t playtime_frames = read_be<std::uint32_t>(data);
-	uint32_t unk3 = read_be<std::uint32_t>(data);
+	uint32_t unk1 = read_be<std::uint32_t>(data);
 
 	if (version != 24) {
 		std::cerr << "Unexpected header:\n";
 		std::cerr << "  version: " << version << '\n';
-		std::cerr << "  UNK1: " << unk1 << '\n';
+		std::cerr << "  Seed: " << seed << '\n';
 		std::cerr << "  Frame counter: " << playtime_frames << '\n';
-		std::cerr << "  UNK3: " << unk3 << '\n';
+		std::cerr << "  UNK1: " << unk1 << '\n';
 		exit(-1);
 	}
 
 
-	std::vector<StreaminfoBackground> bgs;
+	std::vector<StreaminfoBackground*> bgs;
+	bgs.emplace_back(new StreaminfoBackground(data));
+	int count = bgs[0]->count;
+	for (int i = 1; i < count; i++) bgs.emplace_back(new StreaminfoBackground(data));
 
 	//TODO finish!
+	return bgs;
 }
+
+std::vector<PixelsceneBackground*> ParsePixelScenes(const char* path) {
+	std::string file_contents = read_compressed_file(path);
+	const char* data = file_contents.c_str();
+	const char* data_end = data + file_contents.size();
+
+	uint32_t version = read_be<std::uint32_t>(data);
+	uint32_t unk = read_be<std::uint32_t>(data);
+	uint32_t count = read_be<std::uint32_t>(data);
+
+	if (version != 3) {
+		std::cerr << "Unexpected header:\n";
+		std::cerr << "  version: " << version << '\n';
+		exit(-1);
+	}
+
+	std::vector<PixelsceneBackground*> bgs;
+	for (int i = 0; i < count; i++) {
+		bgs.emplace_back(new PixelsceneBackground(data));
+	}
+	return bgs;
+}
+
 
 const float degrees_in_radians = 57.2957795131f;
 template <typename T> static std::vector<T> read_vec(const char*& ptr)
@@ -607,8 +666,11 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	save00ExistenceStream.close();
+	std::vector<StreaminfoBackground*> sibgs = ParseStreaminfo(streamInfoPath);
+	sprintf_s(streamInfoPath, "%s/world/world_pixel_scenes.bin", save00_path);
+	std::vector<PixelsceneBackground*> psbgs = ParsePixelScenes(streamInfoPath);
 
-	LoadMats("mats/");
+	LoadMats("data/mats/");
 	auto paths = GetPngPetris(save00_path);
 	std::vector<Chunk*> chunks;
 	std::vector<std::thread> threads;
@@ -873,6 +935,21 @@ int main(int argc, char** argv)
 
 		sf::Vector2f screenSize = sf::Vector2f(window.getSize());
 		sf::Vector2f topLeftOffset = screenSize * 0.5f;
+		for (StreaminfoBackground* bg : sibgs) {
+			sf::Sprite s;
+			s.setTexture(bg->tex);
+			s.setScale(zoomLevel, zoomLevel);
+			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			window.draw(s);
+		}
+		for (PixelsceneBackground* bg : psbgs) {
+			if (!bg->exists) continue;
+			sf::Sprite s;
+			s.setTexture(bg->tex);
+			s.setScale(zoomLevel, zoomLevel);
+			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			window.draw(s);
+		}
 		for (Chunk* chunk : chunks)
 		{
 			if (chunk->g_dirty) chunk->update();
