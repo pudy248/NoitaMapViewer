@@ -80,8 +80,8 @@ struct PixelsceneBackground {
 		ptr += 6;
 		read_be<std::string>(ptr);
 		ptr += 5;
-		if (read_be<bool>(ptr))
-			ptr += 16;
+		int n_extra = read_be<std::uint8_t>(ptr);
+		ptr += n_extra * 8;
 
 		exists = bg.size();
 		if (exists) {
@@ -142,7 +142,6 @@ std::vector<PixelsceneBackground*> ParsePixelScenes(const char* path) {
 	return bgs;
 }
 
-
 const float degrees_in_radians = 57.2957795131f;
 template <typename T> static std::vector<T> read_vec(const char*& ptr)
 {
@@ -187,38 +186,68 @@ static int IndexOrAdd(std::vector<MatIdx>& mats, const char* mat)
 
 struct Chunk
 {
+	std::string cpath;
 	int cx;
 	int cy;
+	bool image_loaded = false;
+	sf::Texture* tex;
+
+	bool data_loaded = false;
+	std::vector<MatIdx> matNames;
+	std::vector<PhysicsObject> physObjs;
+	uint8_t* data_buffer;
+	//uint8_t materials[512 * 512];
+	//uint32_t customColors[512 * 512];
+	//uint32_t texBuffer[512 * 512];
+
 	bool g_dirty = false;
 	bool s_dirty = false;
 	bool marked_del = false;
-	std::string cpath;
-	std::vector<MatIdx> matNames;
-	uint8_t materials[512 * 512];
-	uint32_t customColors[512 * 512];
-	uint32_t texBuffer[512 * 512];
 	
-	std::vector<PhysicsObject> physObjs;
-	sf::Texture* tex;
 
 	Chunk() = default;
-	Chunk(const char* path, int _cx, int _cy) : cx(_cx), cy(_cy)
-	{
+	Chunk(const char* path, int _cx, int _cy) : cpath(path), cx(_cx), cy(_cy) {
 		cpath = std::string(path);
-		std::string file_contents = read_compressed_file(path);
+
+		load_data();
+		load_image();
+	}
+
+	void load_image() {
+		if (!data_loaded) {
+			load_data();
+
+			redraw_mats();
+			redraw_physics();
+
+			unload_data();
+		}
+		else {
+			redraw_mats();
+			redraw_physics();
+		}
+	}
+
+	void load_data() {
+		data_buffer = (uint8_t*)malloc(9 * 512 * 512);
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
+
+		std::string file_contents = read_compressed_file(cpath.c_str());
 		const char* ptr = file_contents.c_str();
 		const char* data_end = ptr + file_contents.size();
 
 		uint32_t version = read_be<std::uint32_t>(ptr);
-		uint32_t width_q = read_be<std::uint32_t>(ptr);
-		uint32_t height_q = read_be<std::uint32_t>(ptr);
+		uint32_t width = read_be<std::uint32_t>(ptr);
+		uint32_t height = read_be<std::uint32_t>(ptr);
 
-		if (version != 24 || width_q != 512 || height_q != 512)
+		if (version != 24 || width != 512 || height != 512)
 		{
 			std::cerr << "Unexpected header:\n";
 			std::cerr << "  version: " << version << '\n';
-			std::cerr << "  width?: " << width_q << '\n';
-			std::cerr << "  height?: " << height_q << '\n';
+			std::cerr << "  width: " << width << '\n';
+			std::cerr << "  height: " << height << '\n';
 			exit(-1);
 		}
 
@@ -238,10 +267,7 @@ struct Chunk
 		int ccIt = 0;
 		for (int i = 0; i < 512 * 512; i++)
 		{
-			if (materials[i] & 0x80)
-			{
-				customColors[i] = custom_world_colors[ccIt++];
-			}
+			if (materials[i] & 0x80) customColors[i] = custom_world_colors[ccIt++];
 			else customColors[i] = 0;
 		}
 
@@ -280,13 +306,23 @@ struct Chunk
 			physObjs.push_back(into);
 		}
 
-		redraw_mats();
-		redraw_physics();
-		//printf("finished loading chunk at (%i, %i)\n", cx, cy);
+		data_loaded = true;
+		image_loaded = true;
+	}
+
+	void unload_data() {
+		free(data_buffer);
+		physObjs.clear();
+		matNames.clear();
+
+		data_loaded = false;
 	}
 
 	void save()
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		s_dirty = false;
 		std::ostringstream s;
 
@@ -354,6 +390,9 @@ struct Chunk
 
 	void redraw_mats()
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		for (int y = 0; y < 512; y++)
 		{
 			for (int x = 0; x < 512; x++)
@@ -380,6 +419,9 @@ struct Chunk
 	}
 	void redraw_physics()
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		for (const auto& physics_object : physObjs)
 		{
 			int lx = rint(physics_object.x) - 512 * cx;
@@ -436,6 +478,9 @@ struct Chunk
 	}
 	void update_tex()
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		tex->update((unsigned char*)texBuffer, 512, 512, 0, 0);
 	}
 	void update()
@@ -447,16 +492,25 @@ struct Chunk
 	}
 	const char* get(int x, int y)
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		return matNames[materials[512 * y + x] & 0x7f].mat.c_str();
 	}
 	void set(int x, int y, const char* material)
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		materials[512 * y + x] = IndexOrAdd(matNames, material);
 		g_dirty = true;
 		s_dirty = true;
 	}
 	void set(int x, int y, const char* material, uint32_t color)
 	{
+		uint8_t* materials = data_buffer;
+		uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+		uint32_t* texBuffer = customColors + 512 * 512;
 		materials[512 * y + x] = IndexOrAdd(matNames, material) | 0x80;
 		customColors[512 * y + x] = color;
 		g_dirty = true;
@@ -559,7 +613,10 @@ static void ExportMapImage(std::vector<Chunk*>& chunks, int downscale = 2)
 			for (size_t px = 0; px < 512; px += downscale)
 			{
 				size_t x = (dx + px) / downscale;
-				((uint32_t**)rows)[y][x] = c->texBuffer[py * 512 + px];
+				uint8_t* materials = c->data_buffer;
+				uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
+				uint32_t* texBuffer = customColors + 512 * 512;
+				((uint32_t**)rows)[y][x] = texBuffer[py * 512 + px];
 			}
 		}
 	}
@@ -979,8 +1036,9 @@ int main(int argc, char** argv)
 			sf::Vector2i cOff = globalToOffset(gPos);
 			int matIdx = -1;
 			Chunk* chunk = chunkIdx(chunks, cPos);
-			if (chunk)
-				matIdx = chunk->matNames[chunk->materials[512 * cOff.y + cOff.x] & 0x7f].idx;
+			if (chunk) {
+				matIdx = chunk->matNames[chunk->data_buffer[512 * cOff.y + cOff.x] & 0x7f].idx;
+			}
 			
 			char tooltipText[255];
 			sprintf_s(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y, matIdx >= 0 ? allMaterials[matIdx].name : "");

@@ -8,6 +8,16 @@ template<typename T> T read_be(const char*&);
 template<typename T> void write_be(std::ostream&, const T);
 
 template<>
+inline std::uint8_t read_be(const char*& ptr) {
+    return *(ptr++);
+}
+
+template<>
+inline std::uint8_t read_le(const char*& ptr) {
+    return *(ptr++);
+}
+
+template<>
 inline std::uint32_t read_be(const char*& ptr) {
     auto it = reinterpret_cast<const std::uint8_t*>(ptr);
     std::uint32_t r =
