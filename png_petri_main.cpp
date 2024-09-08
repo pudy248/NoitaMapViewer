@@ -8,6 +8,8 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <filesystem>
+#include <format>
 #ifdef _MSC_VER
 #include <conio.h>
 #else
@@ -17,8 +19,10 @@
 #include <SFML/Graphics.hpp>
 
 #include "binops.hpp"
+#include "colors.hpp"
 #include "utils.h"
-#include "colors.h"
+
+namespace fs = std::filesystem;
 
 struct PhysicsObject {
 	std::uint64_t a;
@@ -91,8 +95,8 @@ struct PixelsceneBackground {
 	sf::Texture tex;
 };
 
-std::vector<StreaminfoBackground*> ParseStreaminfo(const char* path) {
-	std::string file_contents = read_compressed_file(path);
+std::vector<StreaminfoBackground*> ParseStreaminfo(fs::path path) {
+	std::string file_contents = read_compressed_file(path.string().c_str());
 	const char* data = file_contents.c_str();
 	const char* data_end = data + file_contents.size();
 
@@ -120,8 +124,8 @@ std::vector<StreaminfoBackground*> ParseStreaminfo(const char* path) {
 	return bgs;
 }
 
-std::vector<PixelsceneBackground*> ParsePixelScenes(const char* path) {
-	std::string file_contents = read_compressed_file(path);
+std::vector<PixelsceneBackground*> ParsePixelScenes(fs::path path) {
+	std::string file_contents = read_compressed_file(path.string().c_str());
 	const char* data = file_contents.c_str();
 	const char* data_end = data + file_contents.size();
 
@@ -157,9 +161,9 @@ template <typename T> static std::vector<T> read_vec(const char*& ptr)
 
 static int GetMaterialIndex(const char* name)
 {
-	for (int i = 0; i < numMats; i++)
+	for (int i = 0; i < allMaterials.size(); i++)
 	{
-		if (allMaterials[i].name != NULL && strcmp(name, allMaterials[i].name) == 0)
+		if (name == allMaterials[i].name)
 		{
 			return i;
 		}
@@ -378,15 +382,16 @@ struct Chunk
 
 		printf("finished saving chunk at (%i, %i)\n", cx, cy);
 	}
-	void destroy(const char* save00_path)
+	void destroy(fs::path save00_path)
 	{
-		char buffer[MAX_PATH];
-		remove(cpath.c_str());
-		sprintf_s(buffer, "%s/world/area_%i.bin", save00_path, cy * 2000 + cx);
-		remove(buffer);
-		sprintf_s(buffer, "%s/world/entities_%i.bin", save00_path, cy * 2000 + cx);
-		remove(buffer);
+                fs::remove(cpath);
+                fs::remove(save00_path / std::format("world/area_{}.bin", cy * 2000 + cx));
+                fs::remove(save00_path / std::format("world/entities_{}.bin", cy * 2000 + cx));
 	}
+
+        int id() {
+          return cy * 2000 + cx;
+        }
 
 	void redraw_mats()
 	{
@@ -524,49 +529,25 @@ struct PetriPath
 	int cx;
 	int cy;
 };
-static std::vector<PetriPath> GetPngPetris(const char* save00_path)
+static std::vector<PetriPath> GetPngPetris(fs::path save00_path)
 {
-	WIN32_FIND_DATA fd;
 	std::vector<PetriPath> outVec;
 
-	char buffer[_MAX_PATH];
-	int offset = 0;
-	_putstr_offset(save00_path, buffer, offset);
-	_putstr_offset("/world/world_*.png_petri", buffer, offset);
-	buffer[offset] = '\0';
-
-	WCHAR wSearchName[_MAX_PATH];
-	MultiByteToWideChar(CP_UTF8, 0, buffer, _MAX_PATH, wSearchName, _MAX_PATH);
-	HANDLE hFind = ::FindFirstFile(wSearchName, &fd);
-	if (hFind != INVALID_HANDLE_VALUE)
-	{
-		do
-		{
-			if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			{
-				offset = 0;
-				char buffer2[_MAX_PATH];
-				WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, _MAX_PATH, buffer2, _MAX_PATH, NULL, NULL);
-
-				_putstr_offset(save00_path, buffer, offset);
-				_putstr_offset("/world/", buffer, offset);
-				_putstr_offset(buffer2, buffer, offset);
-				buffer[offset] = '\0';
-
-				int secondUnderscore = offset - 12;
-				for (;secondUnderscore >= 0; secondUnderscore--) if (buffer[secondUnderscore] == '_') break;
-				int firstUnderscore = secondUnderscore - 2;
-				for (;firstUnderscore >= 0; firstUnderscore--) if (buffer[firstUnderscore] == '_') break;
-				int px = atoi(buffer + firstUnderscore + 1);
-				int py = atoi(buffer + secondUnderscore + 1);
-				int cx = px / 512;
-				int cy = py / 512;
-				PetriPath path = { std::string(buffer), cx, cy };
-				outVec.push_back(path);
-			}
-		} while (::FindNextFile(hFind, &fd));
-		::FindClose(hFind);
-	}
+        for (auto &p : fs::directory_iterator(save00_path / "world")) {
+          if (p.is_regular_file() && p.path().filename().string().starts_with("world_") && p.path().extension() == ".png_petri") {
+            std::stringstream filename(p.path().filename().string());
+            std::string segment;
+            std::getline(filename, segment, '_');  // skip to first number
+            std::getline(filename, segment, '_');  // read first number
+            int px = std::stoi(segment);
+            std::getline(filename, segment, '_');  // read second number
+            int py = std::stoi(segment);
+            int cx = px / 512;
+            int cy = py / 512;
+            PetriPath path = { p.path().string(), cx, cy };
+            outVec.push_back(path);
+          }
+        }
 	return outVec;
 }
 static void ThreadLoadChunks(int tIdx, int tStride, std::vector<PetriPath> paths, std::vector<Chunk*>* outVec, std::mutex* lock)
@@ -697,34 +678,32 @@ static void drawTextAligned(const char* text, sf::Vector2f position, uint32_t si
 
 int main(int argc, char** argv)
 {
-	char save00_path[_MAX_PATH];
+	fs::path save00_path;
 	if (argc > 1)
 	{
-		strcpy_s(save00_path, argv[1]);
+		save00_path = argv[1];
 	}
 	else
 	{
-		strcpy_s(save00_path, "%appdata%");
-		size_t bufferSize = _MAX_PATH;
-		getenv_s(&bufferSize, save00_path, "appdata");
-		std::string tempStr(save00_path);
-		tempStr = tempStr.substr(0, tempStr.length() - 8);
-		sprintf_s(save00_path, "%s/LocalLow/Nolla_Games_Noita/save00", tempStr.c_str());
+#ifdef _WIN32
+          save00_path = std::format("{}/../LocalLow/Nolla_Games_Noita/save00", getenv("APPDATA"));
+#else
+          save00_path = std::format("{}/.local/share/steam/steamapps/compatdata/881100/pfx/drive_c/users/steamuser/AppData/LocalLow/Nolla_Games_Noita/save00", getenv("HOME"));
+#endif
 	}
 
-	char streamInfoPath[_MAX_PATH];
-	sprintf_s(streamInfoPath, "%s/world/.stream_info", save00_path);
+        std::string streamInfoPath = std::format("{}/world/.stream_info", save00_path.string());
 
 	std::ifstream save00ExistenceStream(streamInfoPath, std::ios::binary);
 	if (save00ExistenceStream.fail())
 	{
 		std::cerr << "ERR: stream_info file not found at " << streamInfoPath << "! Ensure that there is a valid save present, or if not a Windows user, run the program again with NoitaMapViewer <path-to-save00>\n";
-		_kbhit();
+		// _kbhit();
 		return -1;
 	}
 	save00ExistenceStream.close();
 	std::vector<StreaminfoBackground*> sibgs = ParseStreaminfo(streamInfoPath);
-	sprintf_s(streamInfoPath, "%s/world/world_pixel_scenes.bin", save00_path);
+        streamInfoPath = std::format("{}/world/world_pixel_scenes.bin", save00_path.string());
 	std::vector<PixelsceneBackground*> psbgs = ParsePixelScenes(streamInfoPath);
 
 	LoadMats("data/mats/");
@@ -1041,7 +1020,17 @@ int main(int argc, char** argv)
 			}
 			
 			char tooltipText[255];
-			sprintf_s(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y, matIdx >= 0 ? allMaterials[matIdx].name : "");
+                        int chunkId = 0,
+                            worldX = 0,
+                            worldY = 0;
+                        if (chunk != nullptr) {
+                          chunkId = chunk->id();
+                          worldX = chunk->cx * 512;
+                          worldY = chunk->cy * 512;
+                        }
+
+
+			sprintf(tooltipText, "(%i, %i: chunk %i, world %i_%i)\n%s", (int)gPos.x, (int)gPos.y, chunkId, worldX, worldY, matIdx >= 0 ? allMaterials[matIdx].name.c_str() : "");
 			sf::Text text = sf::Text(sf::String((const char*)tooltipText), font);
 			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 2));
 			window.draw(text);
@@ -1061,9 +1050,9 @@ int main(int argc, char** argv)
 		{
 			char matBuffer[128];
 			if (matInput)
-				sprintf_s(matBuffer, "Material: [%s]", matEntered.c_str());
+				sprintf(matBuffer, "Material: [%s]", matEntered.c_str());
 			else
-				sprintf_s(matBuffer, "Material: %s", material);
+				sprintf(matBuffer, "Material: %s", material);
 			drawTextAligned(matBuffer, sf::Vector2f(window.getSize().x / 2, window.getSize().y - 50), 48, 1, 2, font, window);
 		}
 
@@ -1076,34 +1065,35 @@ int main(int argc, char** argv)
 			};
 			drawTextAligned(modeNames[mode], sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
 
-			drawTextAligned("\
-== Global ==\n\
-WASD/Arrow Keys - Camera Panning\n\
-Scroll/+- - Zoom\n\
-SHIFT+V - Switch to View Mode\n\
-SHIFT+E - Switch to Edit Mode\n\
-SHIFT+R - Switch to Delete Mode\n\
-CTRL+P - Export to PNG\n\
-CTRL+SHIFT+P - Export to HD PNG\n\
-ALT - Toggle Tooltips\n\
-Tab - Toggle this display\n\
-\n\
-== View Mode ==\n\
-LMB - Camera Panning\n\
-\n\
-== Edit Mode ==\n\
-LMB - Draw Material\n\
-RMB - Copy Material\n\
-Q - Toggle Outline\n\
-SHIFT+Scroll - Change Draw Radius\n\
-SHIFT+; ... Enter - Choose Material by Name\n\
-CTRL+S - Save Edited Chunks\n\
-\n\
-== Delete Mode ==\n\
-LMB - Camera Panning\n\
-RMB - Mark Chunk for Deletion\n\
-CTRL+S - Delete Marked Chunks\n\
-", sf::Vector2f(10, 0), 30, 0, 0, font, window);
+			drawTextAligned(
+                            "== Global ==\n"
+                            "WASD/Arrow Keys - Camera Panning\n"
+                            "Scroll/+- - Zoom\n"
+                            "SHIFT+V - Switch to View Mode\n"
+                            "SHIFT+E - Switch to Edit Mode\n"
+                            "SHIFT+R - Switch to Delete Mode\n"
+                            "CTRL+P - Export to PNG\n"
+                            "CTRL+SHIFT+P - Export to HD PNG\n"
+                            "ALT - Toggle Tooltips\n"
+                            "Tab - Toggle this display\n"
+                            "\n"
+                            "== View Mode ==\n"
+                            "LMB - Camera Panning\n"
+                            "\n"
+                            "== Edit Mode ==\n"
+                            "LMB - Draw Material\n"
+                            "RMB - Copy Material\n"
+                            "Q - Toggle Outline\n"
+                            "SHIFT+Scroll - Change Draw Radius\n"
+                            "SHIFT+; ... Enter - Choose Material by Name\n"
+                            "CTRL+S - Save Edited Chunks\n"
+                            "\n"
+                            "== Delete Mode ==\n"
+                            "LMB - Camera Panning\n"
+                            "RMB - Mark Chunk for Deletion\n"
+                            "CTRL+S - Delete Marked Chunks\n",
+                            sf::Vector2f(10, 0), 30, 0, 0, font, window
+                        );
 		}
 
 		window.display();
