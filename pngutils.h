@@ -22,8 +22,7 @@ void WriteImageRGBA(const char* file_name, uint8_t* data, int w, int h)
 	}
 
 	/* create file */
-	FILE* fp;
-	fopen_s(&fp, file_name, "wb");
+	FILE* fp = fopen(file_name, "wb");
 
 	png_structp png_ptr;
 	png_infop info_ptr;
@@ -61,8 +60,7 @@ void WriteImageRGBA(const char* file_name, uint8_t* data, int w, int h)
 void WriteImageRows(const char* file_name, png_bytep* rows, int w, int h)
 {
 	/* create file */
-	FILE* fp;
-	fopen_s(&fp, file_name, "wb");
+	FILE* fp = fopen(file_name, "wb");
 
 	png_structp png_ptr;
 	png_infop info_ptr;
@@ -103,8 +101,7 @@ Vec2i GetImageDimensions(const char* file_name)
 	char header[8];    // 8 is the maximum size that can be checked
 
 	/* open file and test for it being a png */
-	FILE* fp;
-	fopen_s(&fp, file_name, "rb");
+	FILE* fp = fopen(file_name, "rb");
 	fread(header, 1, 8, fp);
 
 	/* initialize stuff */
@@ -130,8 +127,7 @@ png_byte GetColorType(const char* file_name)
 	char header[8];    // 8 is the maximum size that can be checked
 
 	/* open file and test for it being a png */
-	FILE* fp;
-	fopen_s(&fp, file_name, "rb");
+	FILE* fp = fopen(file_name, "rb");
 	fread(header, 1, 8, fp);
 
 	/* initialize stuff */
@@ -156,8 +152,7 @@ void ReadImage(const char* file_name, uint8_t* data)
 	char header[8];    // 8 is the maximum size that can be checked
 
 	/* open file and test for it being a png */
-	FILE* fp;
-	fopen_s(&fp, file_name, "rb");
+	FILE* fp = fopen(file_name, "rb");
 	fread(header, 1, 8, fp);
 
 	/* initialize stuff */
@@ -205,8 +200,7 @@ void ReadImageRGBA(const char* file_name, uint8_t* data)
 	char header[8];    // 8 is the maximum size that can be checked
 
 	/* open file and test for it being a png */
-	FILE* fp;
-	fopen_s(&fp, file_name, "rb");
+	FILE* fp = fopen(file_name, "rb");
 	fread(header, 1, 8, fp);
 
 	/* initialize stuff */

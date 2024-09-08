@@ -67,9 +67,9 @@ void write_compressed_file(const char* path, std::string in)
 {
     size_t actual_size = in.size();
     std::string compressed_wide(in.size(), 0);
-    size_t compressed_size = fastlz_compress_level(1, in.c_str(), in.size(), compressed_wide.begin()._Unwrapped());
+    size_t compressed_size = fastlz_compress_level(1, in.c_str(), in.size(), compressed_wide.data());
     std::string compressed(compressed_size, 0);
-    std::memcpy(compressed.begin()._Unwrapped(), compressed_wide.begin()._Unwrapped(), compressed_size);
+    std::memcpy(compressed.data(), compressed_wide.data(), compressed_size);
 
     std::ofstream stream(path, std::ios::binary);
     write_le<uint32_t>(stream, compressed_size);
