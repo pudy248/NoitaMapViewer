@@ -1,16 +1,26 @@
+#pragma once
 #include <cstdint>
-#include <fstream>
-#include <stdexcept>
 #include <string>
+#include <fstream>
+#include <sstream>
 
 #include <fastlz.h>
+#include "binops.h"
 
-#include "binops.hpp"
+template <typename CharT>
+bool file_exists(const CharT* path) {
+    std::ifstream s(path, std::ios::binary);
+    return !s.fail();
+}
 
 std::string read_file(const char* path)
 {
     std::string out;
     std::ifstream stream(path, std::ios::binary);
+    if (stream.fail()) {
+        printf("[%s] does not exist.\n", path);
+        exit(-1);
+    }
     while (stream)
     {
         char buffer[1024];
@@ -24,21 +34,21 @@ std::string read_file(const char* path)
 std::string read_compressed_file(const char* path)
 {
     std::string compressed = read_file(path);
-    const char* compressed_ptr = compressed.data();
+    std::ifstream stream(path, std::ios::binary);
 
     if (compressed.size() < 8)
     {
         printf("Error opening file %s:\n    Missing file header.\n", path);
-        return std::string("");
+        exit(-1);
     }
 
-    auto compressed_size = read_le<std::uint32_t>(compressed_ptr);
-    auto decompressed_size = read_le<std::uint32_t>(compressed_ptr);
+    auto compressed_size = read_le<std::uint32_t>(stream);
+    auto decompressed_size = read_le<std::uint32_t>(stream);
 
     if (compressed.size() - 8 != compressed_size)
     {
         printf("Error opening file %s:\n    Bad compressed size: file was %zi bytes, expected %i.\n", path, compressed.size() - 8, compressed_size);
-        return std::string("");
+        exit(-1);
     }
 
     std::string output_buffer(decompressed_size, '\0');
@@ -51,25 +61,30 @@ std::string read_compressed_file(const char* path)
     if (actual_size == 0)
     {
         printf("Error opening file %s:\n    Failed to decompress.\n", path);
-        return std::string("");
+        exit(-1);
     }
 
     if (actual_size != output_buffer.size())
     {
         printf("Error opening file %s:\n    Unexpected decompressed size: file was %zi bytes, expected %i.\n", path, output_buffer.size(), actual_size);
-        return std::string("");
+        exit(-1);
     }
 
     return output_buffer;
 }
 
-void write_compressed_file(const char* path, std::string in)
+void write_file(const char* path, const std::string& in) {
+    std::ofstream stream(path, std::ios::binary);
+    stream.write(in.c_str(), in.length());
+}
+
+void write_compressed_file(const char* path, const std::string& in)
 {
     size_t actual_size = in.size();
     std::string compressed_wide(in.size(), 0);
-    size_t compressed_size = fastlz_compress_level(1, in.c_str(), in.size(), compressed_wide.begin()._Unwrapped());
+    size_t compressed_size = fastlz_compress_level(1, in.c_str(), in.size(), compressed_wide.data());
     std::string compressed(compressed_size, 0);
-    std::memcpy(compressed.begin()._Unwrapped(), compressed_wide.begin()._Unwrapped(), compressed_size);
+    std::memcpy(compressed.data(), compressed_wide.data(), compressed_size);
 
     std::ofstream stream(path, std::ios::binary);
     write_le<uint32_t>(stream, compressed_size);

@@ -1,7 +1,6 @@
 # About
 Noita Map Viewer generates an image of your world based on data from your save, with no ingame mods or settings fiddling required, unlike MapCap.
 Now includes map painting! Switch to edit mode with Shift+E, then start painting away! Press Ctrl+S to save the edited chunks back to your save file.
-Planned features include async rendering of chunks to bypass the startup loading time and filtering for specific materials.
 
 # Usage
 Simply extract the .zip from the most recent release, and run the executable.
