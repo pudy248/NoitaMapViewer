@@ -263,14 +263,6 @@ int main(int argc, char** argv) {
 			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
-		for (PixelSceneBackground* bg : pixelscene_bgs.pending) {
-			if (!bg->exists) continue;
-			sf::Sprite s;
-			s.setTexture(bg->tex);
-			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
-			window.draw(s);
-		}
 		for (PixelSceneBackground* bg : pixelscene_bgs.placed) {
 			if (!bg->exists) continue;
 			sf::Sprite s;
