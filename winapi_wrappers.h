@@ -60,6 +60,7 @@ template <typename F> void for_each_file(std::filesystem::path directory, const 
 		printf("ERR\n");
 		abort();
 	}*/
+	try {
 	for (auto p : std::filesystem::directory_iterator(directory)) {
 		if (p.is_directory()) {
 			if (recursive)
@@ -68,5 +69,9 @@ template <typename F> void for_each_file(std::filesystem::path directory, const 
 		else if (p.path().extension().string() == std::string_view(ext))
 			what(p.path());
 		
+	}
+	} catch (std::filesystem::filesystem_error e) {
+		printf("%s\n", e.what());
+		exit(-1);
 	}
 }

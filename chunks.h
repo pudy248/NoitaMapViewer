@@ -1,15 +1,15 @@
 #pragma once
-#include <vector>
-#include <sstream>
-#include <iostream>
-#include <SFML/Graphics.hpp>
 #include "binops.h"
 #include "file_access.h"
-#include "wak.h"
 #include "streaminfo.h"
+#include "wak.h"
+#include <SFML/Graphics.hpp>
+#include <cmath>
+#include <iostream>
+#include <sstream>
+#include <vector>
 
 #include "materials.h"
-
 
 constexpr float degrees_in_radians = 57.2957795131f;
 
@@ -35,7 +35,8 @@ struct PhysicsObject {
 	std::vector<std::uint32_t> colors;
 };
 
-template<> PhysicsObject read_be<PhysicsObject>(std::istream& s) {
+template <>
+PhysicsObject read_be<PhysicsObject>(std::istream& s) {
 	PhysicsObject out;
 
 	out.a = read_be<std::uint64_t>(s);
@@ -62,10 +63,11 @@ template<> PhysicsObject read_be<PhysicsObject>(std::istream& s) {
 
 	for (auto& c : out.colors)
 		c = read_be<std::uint32_t>(s);
-	
+
 	return out;
 }
-template<> void write_be<PhysicsObject>(std::ostream& s, const PhysicsObject& val) {
+template <>
+void write_be<PhysicsObject>(std::ostream& s, const PhysicsObject& val) {
 	write_be<std::uint64_t>(s, val.a);
 	write_be<std::uint32_t>(s, val.b);
 	write_be<float>(s, val.x);
@@ -110,12 +112,14 @@ struct Chunk {
 };
 
 Chunk ParseChunkData(const char* path) {
-	Chunk c = { path };
+	Chunk c = {path};
 	std::string stem = std::filesystem::path(path).stem().string();
 	for (int i = 0, n = 0; stem[i]; i++) {
 		if (stem[i] == '_') {
-			if (n == 0) c.cx = atoi(stem.data() + i + 1) / 512;
-			else if (n == 1) c.cy = atoi(stem.data() + i + 1) / 512;
+			if (n == 0)
+				c.cx = atoi(stem.data() + i + 1) / 512;
+			else if (n == 1)
+				c.cy = atoi(stem.data() + i + 1) / 512;
 			n++;
 		}
 	}
@@ -145,8 +149,10 @@ Chunk ParseChunkData(const char* path) {
 
 	int ccIt = 0;
 	for (int i = 0; i < 512 * 512; i++) {
-		if (materials[i] & 0x80) customColors[i] = custom_world_colors[ccIt++];
-		else customColors[i] = 0;
+		if (materials[i] & 0x80)
+			customColors[i] = custom_world_colors[ccIt++];
+		else
+			customColors[i] = 0;
 	}
 
 	c.phys_objs = read_vec_be<PhysicsObject>(data);
@@ -173,10 +179,13 @@ void SaveChunk(Chunk& c) {
 	write_vec_be<CachedMat>(s, c.mat_names);
 
 	int count = 0;
-	for (int i = 0; i < 512 * 512; i++) if (materials[i] & 0x80) count++;
+	for (int i = 0; i < 512 * 512; i++)
+		if (materials[i] & 0x80)
+			count++;
 	write_be<std::uint32_t>(s, count);
 	for (int i = 0; i < 512 * 512; i++) {
-		if (materials[i] & 0x80) write_be<std::uint32_t>(s, customColors[i]);
+		if (materials[i] & 0x80)
+			write_be<std::uint32_t>(s, customColors[i]);
 	}
 
 	write_vec_be<PhysicsObject>(s, c.phys_objs);
@@ -195,7 +204,8 @@ void ReloadChunkImage(Chunk& c) {
 		c.tex = new sf::Texture();
 		c.tex->create(512, 512);
 	}
-	if (!c.data_loaded) return;
+	if (!c.data_loaded)
+		return;
 
 	uint8_t* materials = c.data_buffer;
 	uint32_t* customColors = (uint32_t*)(materials + 512 * 512);
@@ -233,8 +243,7 @@ void ReloadChunkImage(Chunk& c) {
 		if (cosine > 0) {
 			ux += physics_object.width * cosine;
 			uy += physics_object.height * cosine;
-		}
-		else {
+		} else {
 			lx += physics_object.width * cosine;
 			ly += physics_object.height * cosine;
 		}
@@ -242,8 +251,7 @@ void ReloadChunkImage(Chunk& c) {
 		if (sine > 0) {
 			lx -= physics_object.height * sine;
 			uy += physics_object.width * sine;
-		}
-		else {
+		} else {
 			ux -= physics_object.height * sine;
 			ly += physics_object.width * sine;
 		}
@@ -260,11 +268,13 @@ void ReloadChunkImage(Chunk& c) {
 				int texX = rint(offsetPixX * cosine + offsetPixY * sine);
 				int texY = rint(-offsetPixX * sine + offsetPixY * cosine);
 
-				if (texX < 0 || physics_object.width <= texX || texY < 0 || physics_object.height <= texY) continue;
+				if (texX < 0 || physics_object.width <= texX || texY < 0 || physics_object.height <= texY)
+					continue;
 
 				int idx = pixY * 512 + pixX;
 				uint32_t c2 = physics_object.colors.data()[physics_object.width * texY + texX];
-				if ((c2 >> 24) == 0) continue;
+				if ((c2 >> 24) == 0)
+					continue;
 				texBuffer[idx] = c2;
 			}
 		}

@@ -348,34 +348,34 @@ int main(int argc, char** argv) {
 		};
 		drawTextAligned(modeNames[mode], sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
 		if (keybinds) {
-			drawTextAligned("\
-== Global ==\n\
-WASD/Arrow Keys - Camera Panning\n\
-Scroll/+- - Zoom\n\
-SHIFT+V - Switch to View Mode\n\
-SHIFT+E - Switch to Edit Mode\n\
-SHIFT+R - Switch to Delete Mode\n\
-CTRL+P - Export to PNG\n\
-CTRL+SHIFT+P - Export to HD PNG\n\
-ALT - Toggle Tooltips\n\
-? - Toggle this display\n\
-\n\
-== View Mode ==\n\
-LMB - Camera Panning\n\
-\n\
-== Edit Mode ==\n\
-LMB - Draw Material\n\
-RMB - Copy Material\n\
-Q - Toggle Outline\n\
-SHIFT+Scroll - Change Draw Radius\n\
-SHIFT+; ... Enter - Choose Material by Name\n\
-CTRL+S - Save Edited Chunks\n\
-\n\
-== Delete Mode ==\n\
-LMB - Camera Panning\n\
-RMB - Mark Chunk for Deletion\n\
-CTRL+S - Delete Marked Chunks\n\
-", sf::Vector2f(10, 0), 30, 0, 0, font, window);
+			drawTextAligned(R"(
+== Global ==
+WASD/Arrow Keys - Camera Panning
+Scroll/+- - Zoom
+SHIFT+V - Switch to View Mode
+SHIFT+E - Switch to Edit Mode
+SHIFT+R - Switch to Delete Mode
+CTRL+P - Export to PNG
+CTRL+SHIFT+P - Export to HD PNG
+ALT - Toggle Tooltips
+? - Toggle this display
+
+== View Mode ==
+LMB - Camera Panning
+
+== Edit Mode ==
+LMB - Draw Material
+RMB - Copy Material
+Q - Toggle Outline
+SHIFT+Scroll - Change Draw Radius
+SHIFT+; ... Enter - Choose Material by Name
+CTRL+S - Save Edited Chunks
+
+== Delete Mode ==
+LMB - Camera Panning
+RMB - Mark Chunk for Deletion
+CTRL+S - Delete Marked Chunks
+)", sf::Vector2f(10, 0), 30, 0, 0, font, window);
 		}
 
 		window.display();

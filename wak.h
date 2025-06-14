@@ -4,12 +4,14 @@
 #include <iostream>
 #include <unordered_map>
 #include <string_view>
+#include <filesystem>
 #include "binops.h"
 #include "file_access.h"
 #include "winapi_wrappers.h"
 #include "pngutils.h"
 
 std::unordered_map<std::string, std::string> globalWakContents;
+std::string empty_str;
 
 void read_wak(const char* wak_path) {
 	globalWakContents.clear();
@@ -34,13 +36,14 @@ std::string& get_file(const std::string& path) {
 		return globalWakContents.at(path);
 	}
 	else {
-		std::cerr << "Unable to find file: " << path << std::endl;
-		exit(-1);
+		return empty_str;
 	}
 }
 
 void load_texture(sf::Texture& tex, const std::string& path) {
 	std::string& contents = get_file(path);
+	if (!contents.size())
+		return;
 	Vec2i dims = GetBufferImageDimensions((uint8_t*)contents.data());
 	tex.loadFromMemory(contents.data(), contents.size(), { 0, 0, dims.x, dims.y });
 }

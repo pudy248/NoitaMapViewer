@@ -79,7 +79,7 @@ template<> void write_be<PixelSceneBackground>(std::ostream& s, const PixelScene
 		write_le<std::uint8_t>(s, bg.pad3[i]);
 	write_le<std::uint8_t>(s, bg.color_mats.size());
 	for (auto i : bg.color_mats)
-		write_be<std::uint64_t>(s, bg.color_mats[i]);
+		write_be<std::uint64_t>(s, i);
 }
 
 struct PixelScenes {
