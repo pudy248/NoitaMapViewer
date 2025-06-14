@@ -5,38 +5,89 @@
 #include "binops.h"
 #include "winapi_wrappers.h"
 #include "pngutils.h"
+#include "wak.h"
 
 struct Material {
 	std::string name;
+	uint32_t color;
 	int w, h;
 	uint32_t* tex;
 };
 
 std::vector<Material> allMaterials;
 
-
+static uint32_t to_int(const std::string_view s) {
+	uint32_t result;
+	auto err = std::from_chars(s.data(), s.data() + s.size(), result, 16);
+	if (err.ec != std::errc{} || err.ptr != s.data() + s.size()) {
+		fprintf(stderr, "Value '%.*s' could not be converted to a number.\n", (uint32_t)s.size(), s.data());
+		std::exit(-1);
+	}
+	return result;
+}
 void LoadMats(const char* path) {
 	uint32_t* missingTexture = (uint32_t*)malloc(4 * 84 * 84);
 	for (int py = 0; py < 84; py++) {
 		for (int px = 0; px < 84; px++) {
 			uint32_t color = 0;
-			if (((px / 42) + (py / 42)) % 2 == 0) color = 0x7fdc00ff;
+			if (((px / 42) + (py / 42)) % 2 == 0) color = 0xffdc00ff;
 			missingTexture[py * 84 + px] = color;
 		}
 	}
-	allMaterials.emplace_back(Material(std::string("MISSING_RESOURCE"), 84, 84, missingTexture));
-	uint32_t* air = (uint32_t*)malloc(4 * 1 * 1);
-	air[0] = 0;
-	allMaterials.emplace_back(Material(std::string("air"), 1, 1, air));
-	
-	for_each_file(path, ".png", true, [](const std::filesystem::path& p) {
-			Vec2i dims = GetImageDimensions(p.string().c_str());
-			uint8_t* data = (uint8_t*)malloc(4 * dims.x * dims.y);
-			ReadImageRGBA(p.string().c_str(), data);
-			//printf("loaded texture: %s\n", filename);
-			allMaterials.emplace_back(Material(p.stem().string(), dims.x, dims.y, (uint32_t*)data));
+	allMaterials.emplace_back(Material(std::string("MISSING_RESOURCE"), 0, 84, 84, missingTexture));
+
+	std::string_view mats = get_file("data/materials.xml");
+	while (true) {
+		uint32_t color = 0;
+		std::string texture{};
+		auto it = mats.find("<CellData");
+		if (it == (size_t)-1)
+			break;
+		mats = mats.substr(it);
+		it = mats.find("</CellData");
+		auto mat = mats.substr(0, it);
+		mats = mats.substr(it);
+		it = mat.find("\tname=");
+		mat = mat.substr(it + 7);
+		std::string name(mat.data(), mat.find('"'));
+		it = mat.find("<Graphics");
+		if (it == (size_t)-1) {
+			auto col = mat.find("\twang_color=");
+			if (col != (size_t)-1) {
+				auto col_str = mat.substr(col + 13);
+				auto end = col_str.find('"');
+				color = to_int(col_str.substr(0, end));
+			}
+		} else {
+			mat = mat.substr(it);
+			auto graphics = mat.substr(0, mat.find('>'));
+
+			auto tex = graphics.find("\ttexture_file=");
+			if (tex != (size_t)-1) {
+				auto tex_str = graphics.substr(tex + 15);
+				auto end = tex_str.find('"');
+				texture = std::string(tex_str.data(), end);
+			}
+			auto col = graphics.find("\tcolor=");
+			if (col != (size_t)-1) {
+				auto col_str = graphics.substr(col + 8);
+				auto end = col_str.find('"');
+				color = to_int(col_str.substr(0, end));
+			}
 		}
-	);
+		if (texture.size()) {
+			std::string& img = get_file(texture);
+			Vec2i dims = GetBufferImageDimensions((const uint8_t*)img.c_str());
+			uint8_t* data = (uint8_t*)malloc(4 * dims.x * dims.y);
+			ReadBufferImage((const uint8_t*)img.c_str(), data, true);
+			allMaterials.emplace_back(Material(name, color, dims.x, dims.y, (uint32_t*)data));
+			printf("Adding %s = %s\n", name.c_str(), texture.c_str());
+		} else {
+			allMaterials.emplace_back(Material(name, color, 0, 0, nullptr));
+			printf("Adding %s = %06x\n", name.c_str(), color);
+		}
+	}
+	allMaterials[1].color = 0; //air
 }
 
 struct CachedMat {

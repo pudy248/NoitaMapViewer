@@ -219,14 +219,14 @@ void ReloadChunkImage(Chunk& c) {
 				texBuffer[i] = customColors[i];
 			else {
 				Material m = allMaterials[c.mat_names[material].index];
-				int gx = x + c.cx * 512;
-				int gy = y + c.cy * 512;
-				gx *= 6;
-				gy *= 6;
-				int texX = ((gx % m.w) + m.w) % m.w;
-				int texY = ((gy % m.h) + m.h) % m.h;
-				uint32_t color = m.tex[texY * m.w + texX];
-				texBuffer[i] = color;
+				if (m.tex) {
+					int gx = x + c.cx * 512;
+					int gy = y + c.cy * 512;
+					int texX = ((gx % m.w) + m.w) % m.w;
+					int texY = ((gy % m.h) + m.h) % m.h;
+					texBuffer[i] = m.tex[texY * m.w + texX];
+				} else
+					texBuffer[i] = (m.color & 0xff00ff00) | ((m.color & 0xff) << 16) | ((m.color & 0xff0000) >> 16);
 			}
 		}
 	}
