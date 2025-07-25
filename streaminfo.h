@@ -112,6 +112,9 @@ std::vector<StreaminfoBackground*> ParseStreaminfo(const char* path) {
 	uint32_t gamemode_num = read_be<std::uint32_t>(data);
 	std::string gamemode_name = read_be<std::string>(data);
 	uint64_t gamemode_steam_id = read_be<std::uint64_t>(data);
+	data.ignore(13);
+	std::string ui_newgame_name = read_be<std::string>(data);
+	data.ignore(16);
 
 	return bgs;
 }

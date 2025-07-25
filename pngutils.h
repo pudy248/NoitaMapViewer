@@ -214,6 +214,9 @@ void ReadBufferImage(const uint8_t* compressed_data, uint8_t* data, bool rgba) {
 	png_byte color_type = png_get_color_type(png_ptr, info_ptr);
 	png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
 
+	if (color_type == PNG_COLOR_TYPE_PALETTE)
+		png_set_palette_to_rgb(png_ptr);
+
 	int number_of_passes = png_set_interlace_handling(png_ptr);
 	png_read_update_info(png_ptr, info_ptr);
 
@@ -237,7 +240,7 @@ void ReadBufferImage(const uint8_t* compressed_data, uint8_t* data, bool rgba) {
 			}
 			png_read_image(png_ptr, rows);
 		}
-	} else if (color_type == PNG_COLOR_TYPE_RGBA) {
+	} else if (color_type == PNG_COLOR_TYPE_RGBA || color_type == PNG_COLOR_TYPE_PALETTE) {
 		if (rgba) {
 			for (int y = 0; y < h; y++) {
 				rows[y] = data + 4 * y * w;
@@ -259,7 +262,7 @@ void ReadBufferImage(const uint8_t* compressed_data, uint8_t* data, bool rgba) {
 			}
 		}
 	} else {
-		fprintf(stderr, "Unrecognized PNG color type.\n");
+		fprintf(stderr, "Unrecognized PNG color type %02x.\n", color_type);
 	}
 
 	png_read_end(png_ptr, info_ptr);
@@ -287,6 +290,9 @@ void ReadImage(const char* file_name, uint8_t* data, bool rgba) {
 	png_byte color_type = png_get_color_type(png_ptr, info_ptr);
 	png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
 
+	if (color_type == PNG_COLOR_TYPE_PALETTE)
+		png_set_palette_to_rgb(png_ptr);
+
 	int number_of_passes = png_set_interlace_handling(png_ptr);
 	png_read_update_info(png_ptr, info_ptr);
 
@@ -310,7 +316,7 @@ void ReadImage(const char* file_name, uint8_t* data, bool rgba) {
 			}
 			png_read_image(png_ptr, rows);
 		}
-	} else if (color_type == PNG_COLOR_TYPE_RGBA) {
+	} else if (color_type == PNG_COLOR_TYPE_RGBA || color_type == PNG_COLOR_TYPE_PALETTE) {
 		if (rgba) {
 			for (int y = 0; y < h; y++) {
 				rows[y] = data + 4 * y * w;
@@ -332,7 +338,7 @@ void ReadImage(const char* file_name, uint8_t* data, bool rgba) {
 			}
 		}
 	} else {
-		fprintf(stderr, "Unrecognized PNG color type.\n");
+		fprintf(stderr, "Unrecognized PNG color type %02x.\n", color_type);
 	}
 
 	png_read_end(png_ptr, info_ptr);
