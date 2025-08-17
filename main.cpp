@@ -159,6 +159,12 @@ int main(int argc, char** argv) {
 						}
 					WritePixelScenes(pixelscene_path.string().c_str(), pixelscene_bgs);
 				}
+				else if (mode == 2 && event.key.code == sf::Keyboard::A && event.key.control) {
+					for (Chunk* c : chunks) {
+						if (event.key.shift || c->cx < -34 || c->cx > 36 || c->cy > 84 || c->cy < -60)
+							c->marked_for_delete = !c->marked_for_delete;
+					}
+				}
 				else if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
 					tooltip = !tooltip;
 				else if (event.key.code == sf::Keyboard::Slash && event.key.shift)
@@ -349,7 +355,7 @@ SHIFT+E - Switch to Edit Mode
 SHIFT+R - Switch to Delete Mode
 CTRL+P - Export to PNG
 CTRL+SHIFT+P - Export to HD PNG
-ALT - Toggle Tooltips
+ALT - Toggle tooltips
 ? - Toggle this display
 
 == View Mode ==
@@ -359,14 +365,16 @@ LMB - Camera Panning
 LMB - Draw Material
 RMB - Copy Material
 Q - Toggle Outline
-SHIFT+Scroll - Change Draw Radius
-SHIFT+; ... Enter - Choose Material by Name
-CTRL+S - Save Edited Chunks
+SHIFT+Scroll - Change draw radius
+SHIFT+; ... Enter - Choose material by name
+CTRL+S - Save edited chunks
 
 == Delete Mode ==
 LMB - Camera Panning
-RMB - Mark Chunk for Deletion
-CTRL+S - Delete Marked Chunks
+RMB - Mark chunk for deletion
+CTRL+A - Mark all chunks outside the main world for deletion
+CTRL+SHIFT+A - Mark ALL chunks for deletion.
+CTRL+S - Delete marked chunks
 )", sf::Vector2f(10, 0), 30, 0, 0, font, window);
 		}
 
