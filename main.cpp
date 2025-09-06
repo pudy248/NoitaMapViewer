@@ -1,12 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <filesystem>
 #include <SFML/Graphics.hpp>
+
 #include "materials.h"
 #include "png_petri.h"
 #include "streaminfo.h"
 #include "chunks.h"
 #include "edit.h"
-
 
 sf::Vector2f viewportCenter(512, 512);
 float zoomLevel = 1;
@@ -14,20 +14,23 @@ float zoomLevel = 1;
 static sf::Vector2f mouseLocal(sf::RenderWindow& window) {
 	return sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
 }
-static sf::Vector2f localToGlobal(sf::Vector2f local) {
-	return local / zoomLevel + viewportCenter;
-}
+static sf::Vector2f localToGlobal(sf::Vector2f local) { return local / zoomLevel + viewportCenter; }
 
-static void drawTextAligned(const char* text, sf::Vector2f position, uint32_t size, int hAlign, int vAlign, sf::Font font, sf::RenderWindow& window) {
+static void drawTextAligned(const char* text, sf::Vector2f position, uint32_t size, int hAlign, int vAlign,
+	sf::Font font, sf::RenderWindow& window) {
 	sf::Text t(text, font, size);
 	t.setPosition(position);
 	sf::FloatRect bounds = t.getGlobalBounds();
 	int xPos = position.x;
 	int yPos = position.y;
-	if (hAlign == 2) xPos = position.x - bounds.width;
-	else if (hAlign == 1) xPos = position.x - bounds.width * 0.5f;
-	if (vAlign == 2) yPos = position.y - bounds.height;
-	else if (vAlign == 1) yPos = position.y - bounds.height * 0.5f;
+	if (hAlign == 2)
+		xPos = position.x - bounds.width;
+	else if (hAlign == 1)
+		xPos = position.x - bounds.width * 0.5f;
+	if (vAlign == 2)
+		yPos = position.y - bounds.height;
+	else if (vAlign == 1)
+		yPos = position.y - bounds.height * 0.5f;
 	t.setPosition(xPos, yPos);
 	window.draw(t);
 }
@@ -35,7 +38,7 @@ static void drawTextAligned(const char* text, sf::Vector2f position, uint32_t si
 int main(int argc, char** argv) {
 	std::filesystem::path current = std::filesystem::current_path();
 	std::filesystem::path save00_path = FindSave00(argc > 1 ? argv[1] : "");
-	read_wak(find_wak((current/".wakpath").string().c_str()).string().c_str());
+	read_wak(find_wak((current / ".wakpath").string().c_str()).string().c_str());
 	std::filesystem::current_path() = current;
 	std::filesystem::path pixelscene_path = save00_path / "world/world_pixel_scenes.bin";
 	auto streaminfo_bgs = ParseStreaminfo((save00_path / "world/.stream_info").string().c_str());
@@ -43,15 +46,11 @@ int main(int argc, char** argv) {
 	LoadMats((current / "data/mats/").string().c_str());
 	auto chunks = LoadPngPetris((save00_path / "world/").string().c_str());
 
-
 	sf::Font font = sf::Font();
 	font.loadFromFile((current / "data/NoitaPixel.ttf").string());
 
 	sf::Vector2f initial_display_sz(950.f, 800.f);
-	sf::RenderWindow window(
-		sf::VideoMode(initial_display_sz.x, initial_display_sz.y),
-		"World Viewer"
-	);
+	sf::RenderWindow window(sf::VideoMode(initial_display_sz.x, initial_display_sz.y), "World Viewer");
 
 	window.setVerticalSyncEnabled(true);
 	auto handle_resize = [&](sf::Vector2f new_size) {
@@ -84,31 +83,28 @@ int main(int argc, char** argv) {
 			if (event.type == sf::Event::Closed)
 				window.close();
 
-			if (event.type == sf::Event::Resized) {
+			if (event.type == sf::Event::Resized)
 				handle_resize(sf::Vector2f(event.size.width, event.size.height));
-			}
 
 			if (event.type == sf::Event::MouseWheelMoved) {
 				if (mode == 1 && sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) {
 					drawRadius *= powf(scrollZoomSensitivity, event.mouseWheel.delta);
-				}
-				else {
-					if (event.mouseWheel.delta > 0) {
-						sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-						sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-						zoomLevel *= scrollZoomSensitivity;
-						sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-						sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-						viewportCenter += delta;
-					}
-					else {
-						sf::Vector2f distFromCenter = sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
-						sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
-						zoomLevel /= scrollZoomSensitivity;
-						sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
-						sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
-						viewportCenter += delta;
-					}
+				} else if (event.mouseWheel.delta > 0) {
+					sf::Vector2f distFromCenter =
+						sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel *= scrollZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
+				} else {
+					sf::Vector2f distFromCenter =
+						sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(window.getSize()) * 0.5f;
+					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
+					zoomLevel /= scrollZoomSensitivity;
+					sf::Vector2f distFromCenterWorldCoords2 = distFromCenter / zoomLevel;
+					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
+					viewportCenter += delta;
 				}
 			}
 
@@ -116,7 +112,8 @@ int main(int argc, char** argv) {
 				if (matInput) {
 					char character = event.text.unicode;
 					if (character == 0x08) {
-						if (matEntered.size() > 0) matEntered.erase(matEntered.size() - 1);
+						if (matEntered.size() > 0)
+							matEntered.erase(matEntered.size() - 1);
 						continue;
 					}
 					bool isNum = 0x30 <= character && character <= 0x39;
@@ -140,17 +137,14 @@ int main(int argc, char** argv) {
 				if (mode == 1 && event.key.code == sf::Keyboard::SemiColon && event.key.shift) {
 					matInput = true;
 					matEntered.clear();
-				}
-				else if (event.key.code == sf::Keyboard::P && event.key.control) {
+				} else if (event.key.code == sf::Keyboard::P && event.key.control) {
 					printf("Saving map to map.png...\n");
 					ExportMapImage(chunks, event.key.shift ? 1 : 4);
-				}
-				else if (mode == 1 && event.key.code == sf::Keyboard::S && event.key.control) {
+				} else if (mode == 1 && event.key.code == sf::Keyboard::S && event.key.control) {
 					for (Chunk* chunk : chunks)
 						if (chunk->file_dirty)
 							SaveChunk(*chunk);
-				}
-				else if (mode == 2 && event.key.code == sf::Keyboard::S && event.key.control) {
+				} else if (mode == 2 && event.key.code == sf::Keyboard::S && event.key.control) {
 					for (int i = 0; i < chunks.size(); i++)
 						if (chunks[i]->marked_for_delete) {
 							DestroyChunk(*chunks[i], pixelscene_bgs, save00_path.string().c_str());
@@ -158,14 +152,34 @@ int main(int argc, char** argv) {
 							i--;
 						}
 					WritePixelScenes(pixelscene_path.string().c_str(), pixelscene_bgs);
-				}
-				else if (mode == 2 && event.key.code == sf::Keyboard::A && event.key.control) {
-					for (Chunk* c : chunks) {
+				} else if (mode == 2 && event.key.code == sf::Keyboard::A && event.key.control) {
+					for (Chunk* c : chunks)
 						if (event.key.shift || c->cx < -34 || c->cx > 36 || c->cy > 84 || c->cy < -60)
 							c->marked_for_delete = !c->marked_for_delete;
+				} else if (mode == 2 && event.key.code == sf::Keyboard::W && event.key.control) {
+					printf("W\n");
+					for (int i = 0; i < pixelscene_bgs.pending.size(); i++) {
+						PixelSceneBackground* b = pixelscene_bgs.pending[i];
+						std::string str = b->bg.size() ? b->bg : b->mat;
+						if (!str.starts_with("data/biome_impl/spliced") &&
+								pixelscene_bgs.reference_whitelist.find(str) == -1ull ||
+							!str.size()) {
+							pixelscene_bgs.pending.erase(pixelscene_bgs.pending.begin() + i);
+							--i;
+						}
 					}
-				}
-				else if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
+					for (int i = 0; i < pixelscene_bgs.placed.size(); i++) {
+						PixelSceneBackground* b = pixelscene_bgs.placed[i];
+						std::string str = b->bg.size() ? b->bg : b->mat;
+						if (!str.starts_with("data/biome_impl/spliced") &&
+								pixelscene_bgs.reference_whitelist.find(str) == -1ull ||
+							!str.size()) {
+							pixelscene_bgs.placed.erase(pixelscene_bgs.placed.begin() + i);
+							--i;
+						}
+					}
+					WritePixelScenes(pixelscene_path.string().c_str(), pixelscene_bgs);
+				} else if (event.key.code == sf::Keyboard::LAlt || event.key.code == sf::Keyboard::RAlt)
 					tooltip = !tooltip;
 				else if (event.key.code == sf::Keyboard::Slash && event.key.shift)
 					keybinds = !keybinds;
@@ -191,13 +205,20 @@ int main(int argc, char** argv) {
 		}
 		if (window.hasFocus() && !matInput) {
 			float actualPanSensitivity = keyPanSensitivity;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) actualPanSensitivity *= 3;
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
+				actualPanSensitivity *= 3;
 
-			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) && !sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) && !sf::Keyboard::isKeyPressed(sf::Keyboard::LSystem)) {
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A)) viewportCenter.x -= actualPanSensitivity / zoomLevel;
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D)) viewportCenter.x += actualPanSensitivity / zoomLevel;
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W)) viewportCenter.y -= actualPanSensitivity / zoomLevel;
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S)) viewportCenter.y += actualPanSensitivity / zoomLevel;
+			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) &&
+				!sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) &&
+				!sf::Keyboard::isKeyPressed(sf::Keyboard::LSystem)) {
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::A))
+					viewportCenter.x -= actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::D))
+					viewportCenter.x += actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+					viewportCenter.y -= actualPanSensitivity / zoomLevel;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+					viewportCenter.y += actualPanSensitivity / zoomLevel;
 
 				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Add) || sf::Keyboard::isKeyPressed(sf::Keyboard::Equal)) {
 					sf::Vector2f distFromCenter = mouseLocal(window);
@@ -207,7 +228,8 @@ int main(int argc, char** argv) {
 					sf::Vector2f delta = distFromCenterWorldCoords - distFromCenterWorldCoords2;
 					viewportCenter += delta;
 				}
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) || sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen)) {
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Subtract) ||
+					sf::Keyboard::isKeyPressed(sf::Keyboard::Hyphen)) {
 					sf::Vector2f distFromCenter = mouseLocal(window);
 					sf::Vector2f distFromCenterWorldCoords = distFromCenter / zoomLevel;
 					zoomLevel /= keyZoomSensitivity;
@@ -225,10 +247,9 @@ int main(int argc, char** argv) {
 					}
 					lastMousePos = newMousePos;
 					mouseDownLastFrame = true;
-				}
-				else mouseDownLastFrame = false;
-			}
-			else if (mode == 1) {
+				} else
+					mouseDownLastFrame = false;
+			} else if (mode == 1) {
 				if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
 					sf::Vector2f gPos = localToGlobal(mouseLocal(window));
 
@@ -237,23 +258,21 @@ int main(int argc, char** argv) {
 						float len = sqrtf(diff.x * diff.x + diff.y * diff.y);
 						for (float offset = 0; offset < len; offset = fminf(offset + drawRadius / 4, len))
 							set_circle(chunks, gPos - diff * (offset / len), drawRadius, material);
-					}
-					else
+					} else
 						set_circle(chunks, gPos, drawRadius, material);
 
 					lastMousePos = gPos;
 					mouseDownLastFrame = true;
-				}
-				else mouseDownLastFrame = false;
+				} else
+					mouseDownLastFrame = false;
 
 				if (sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
 					sf::Vector2i gPos = roundGlobal(localToGlobal(mouseLocal(window)));
 					sf::Vector2i cPos = globalToChunk(gPos);
 					sf::Vector2i cOff = globalToOffset(gPos);
 					Chunk* chunk = chunkIdx(chunks, cPos);
-					if (chunk) {
+					if (chunk)
 						material = ChunkGet(*chunk, cOff.x, cOff.y);
-					}
 				}
 			}
 		}
@@ -266,37 +285,45 @@ int main(int argc, char** argv) {
 			sf::Sprite s;
 			s.setTexture(bg->tex);
 			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+				(bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
 		for (PixelSceneBackground* bg : pixelscene_bgs.placed) {
-			if (!bg->exists) continue;
+			if (!bg->exists)
+				continue;
 			sf::Sprite s;
 			s.setTexture(bg->tex);
 			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+				(bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
 		for (PixelSceneBackground* bg : pixelscene_bgs.backgrounds) {
-			if (!bg->exists) continue;
+			if (!bg->exists)
+				continue;
 			sf::Sprite s;
 			s.setTexture(bg->tex);
 			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x, (bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			s.setPosition((bg->x - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+				(bg->y - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
 		for (Chunk* chunk : chunks) {
-			if (chunk->image_dirty || !chunk->image_loaded) ReloadChunkImage(*chunk);
+			if (chunk->image_dirty || !chunk->image_loaded)
+				ReloadChunkImage(*chunk);
 			sf::Sprite s;
 			s.setTexture(*chunk->tex);
 			s.setScale(zoomLevel, zoomLevel);
-			s.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			s.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+				(chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 			window.draw(s);
 		}
 		for (Chunk* chunk : chunks) {
 			if (mode == 2 && chunk->marked_for_delete) {
 				sf::RectangleShape r(sf::Vector2f(512 * zoomLevel, 512 * zoomLevel));
-				r.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x, (chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+				r.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+					(chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
 				r.setFillColor(sf::Color::Transparent);
 				r.setOutlineThickness(1);
 				r.setOutlineColor(sf::Color::Red);
@@ -310,12 +337,12 @@ int main(int argc, char** argv) {
 			sf::Vector2i cOff = globalToOffset(gPos);
 			int matIdx = -1;
 			Chunk* chunk = chunkIdx(chunks, cPos);
-			if (chunk) {
+			if (chunk)
 				matIdx = chunk->data_buffer[512 * cOff.y + cOff.x] & 0x7f;
-			}
 
 			char tooltipText[255];
-			sprintf(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y, matIdx >= 0 ? chunk->mat_names[matIdx].name.c_str() : "");
+			sprintf(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y,
+				matIdx >= 0 ? chunk->mat_names[matIdx].name.c_str() : "");
 			sf::Text text = sf::Text(sf::String((const char*)tooltipText), font);
 			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 2));
 			window.draw(text);
@@ -323,7 +350,8 @@ int main(int argc, char** argv) {
 
 		if (mode == 1 && outline) {
 			sf::CircleShape circle(drawRadius * zoomLevel);
-			circle.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) - sf::Vector2f(drawRadius * zoomLevel, drawRadius * zoomLevel));
+			circle.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) -
+							   sf::Vector2f(drawRadius * zoomLevel, drawRadius * zoomLevel));
 			circle.setFillColor(sf::Color::Transparent);
 			circle.setOutlineThickness(1);
 			circle.setOutlineColor(sf::Color::White);
@@ -336,14 +364,11 @@ int main(int argc, char** argv) {
 				sprintf(matBuffer, "Material: [%s]", matEntered.c_str());
 			else
 				sprintf(matBuffer, "Material: %s", material);
-			drawTextAligned(matBuffer, sf::Vector2f(window.getSize().x / 2, window.getSize().y - 50), 48, 1, 2, font, window);
+			drawTextAligned(
+				matBuffer, sf::Vector2f(window.getSize().x / 2, window.getSize().y - 50), 48, 1, 2, font, window);
 		}
 
-		const char* modeNames[] = {
-			"[[ View Mode ]]",
-			"[[ Edit Mode ]]",
-			"[[ Delete Mode]]"
-		};
+		const char* modeNames[] = {"[[ View Mode ]]", "[[ Edit Mode ]]", "[[ Delete Mode]]"};
 		drawTextAligned(modeNames[mode], sf::Vector2f(window.getSize().x / 2, 0), 48, 1, 0, font, window);
 		if (keybinds) {
 			drawTextAligned(R"(
@@ -373,9 +398,11 @@ CTRL+S - Save edited chunks
 LMB - Camera Panning
 RMB - Mark chunk for deletion
 CTRL+A - Mark all chunks outside the main world for deletion
-CTRL+SHIFT+A - Mark ALL chunks for deletion.
+CTRL+SHIFT+A - Mark ALL chunks for deletion
 CTRL+S - Delete marked chunks
-)", sf::Vector2f(10, 0), 30, 0, 0, font, window);
+CTRL+W - Delete all non-essential pixel scenes
+)",
+				sf::Vector2f(10, 0), 30, 0, 0, font, window);
 		}
 
 		window.display();

@@ -315,20 +315,10 @@ void DestroyChunk(Chunk& c, PixelScenes& scenes, const char* save00_path) {
 		if (b->x >= 512 * c.cx && b->x < 512 * c.cx + 512 && b->y >= 512 * c.cy && b->y < 512 * c.cy + 512) {
 			scenes.placed.erase(scenes.placed.begin() + i);
 			--i;
-			scenes.pending.emplace_back(b);
+			std::string str = b->bg.size() ? b->bg : b->mat;
+			if ((str.starts_with("data/biome_impl/spliced") || scenes.reference_whitelist.find(str) != -1ull) && !str.size())
+				scenes.pending.emplace_back(b);
 		}
 	}
 }
 
-/*
-	void unload_data() {
-		free(data_buffer);
-		physObjs.clear();
-		matNames.clear();
-
-		data_loaded = false;
-	}
-
-	void destroy(const char* save00_path) {
-	}
-};*/

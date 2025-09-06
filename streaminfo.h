@@ -86,6 +86,7 @@ struct PixelScenes {
 	std::vector<PixelSceneBackground*> pending;
 	std::vector<PixelSceneBackground*> placed;
 	std::vector<PixelSceneBackground*> backgrounds;
+	std::string reference_whitelist;
 };
 
 std::vector<StreaminfoBackground*> ParseStreaminfo(const char* path) {
@@ -136,7 +137,7 @@ PixelScenes ParsePixelScenes(const char* path) {
 	std::vector<PixelSceneBackground*> pending = read_vec_ptrs_be<PixelSceneBackground>(data);
 	std::vector<PixelSceneBackground*> placed = read_vec_ptrs_be<PixelSceneBackground>(data);
 	std::vector<PixelSceneBackground*> backgrounds = read_vec_ptrs_be<PixelSceneBackground>(data);
-	return { pending, placed, backgrounds };
+	return {pending, placed, backgrounds, get_file("data/biome/_pixel_scenes.xml")};
 }
 
 void WritePixelScenes(const char* path, PixelScenes& scenes) {
