@@ -162,8 +162,7 @@ int main(int argc, char** argv) {
 						PixelSceneBackground* b = pixelscene_bgs.pending[i];
 						std::string str = b->bg.size() ? b->bg : b->mat;
 						if (!str.starts_with("data/biome_impl/spliced") &&
-								pixelscene_bgs.reference_whitelist.find(str) == -1ull ||
-							!str.size()) {
+								pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
 							pixelscene_bgs.pending.erase(pixelscene_bgs.pending.begin() + i);
 							--i;
 						}
@@ -172,8 +171,7 @@ int main(int argc, char** argv) {
 						PixelSceneBackground* b = pixelscene_bgs.placed[i];
 						std::string str = b->bg.size() ? b->bg : b->mat;
 						if (!str.starts_with("data/biome_impl/spliced") &&
-								pixelscene_bgs.reference_whitelist.find(str) == -1ull ||
-							!str.size()) {
+								pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
 							pixelscene_bgs.placed.erase(pixelscene_bgs.placed.begin() + i);
 							--i;
 						}

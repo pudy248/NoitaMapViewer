@@ -316,7 +316,7 @@ void DestroyChunk(Chunk& c, PixelScenes& scenes, const char* save00_path) {
 			scenes.placed.erase(scenes.placed.begin() + i);
 			--i;
 			std::string str = b->bg.size() ? b->bg : b->mat;
-			if ((str.starts_with("data/biome_impl/spliced") || scenes.reference_whitelist.find(str) != -1ull) && !str.size())
+			if (str.starts_with("data/biome_impl/spliced") || scenes.reference_whitelist.find(str) != -1ull)
 				scenes.pending.emplace_back(b);
 		}
 	}
