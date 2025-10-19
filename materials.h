@@ -1,11 +1,12 @@
 #pragma once
+#include "binops.h"
+#include "pngutils.h"
+#include "wak.h"
+#include "winapi_wrappers.h"
+#include <charconv>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include "binops.h"
-#include "winapi_wrappers.h"
-#include "pngutils.h"
-#include "wak.h"
 
 struct Material {
 	std::string name;
@@ -30,11 +31,12 @@ void LoadMats(const char* path) {
 	for (int py = 0; py < 84; py++) {
 		for (int px = 0; px < 84; px++) {
 			uint32_t color = 0;
-			if (((px / 42) + (py / 42)) % 2 == 0) color = 0xffdc00ff;
+			if (((px / 42) + (py / 42)) % 2 == 0)
+				color = 0xffdc00ff;
 			missingTexture[py * 84 + px] = color;
 		}
 	}
-	allMaterials.emplace_back(Material(std::string("MISSING_RESOURCE"), 0, 84, 84, missingTexture));
+	allMaterials.emplace_back(Material{std::string("MISSING_RESOURCE"), 0, 84, 84, missingTexture});
 
 	std::string_view mats = get_file("data/materials.xml");
 	while (true) {
@@ -80,10 +82,10 @@ void LoadMats(const char* path) {
 			Vec2i dims = GetBufferImageDimensions((const uint8_t*)img.c_str());
 			uint8_t* data = (uint8_t*)malloc(4 * dims.x * dims.y);
 			ReadBufferImage((const uint8_t*)img.c_str(), data, true);
-			allMaterials.emplace_back(Material(name, color, dims.x, dims.y, (uint32_t*)data));
+			allMaterials.emplace_back(Material{name, color, dims.x, dims.y, (uint32_t*)data});
 			printf("Adding %s = %s\n", name.c_str(), texture.c_str());
 		} else {
-			allMaterials.emplace_back(Material(name, color, 0, 0, nullptr));
+			allMaterials.emplace_back(Material{name, color, 0, 0, nullptr});
 			printf("Adding %s = %06x\n", name.c_str(), color);
 		}
 	}
@@ -103,19 +105,19 @@ int FindMaterial(const char* mat) {
 	return 0;
 }
 int IndexOrAdd(std::vector<CachedMat>& mats, const char* mat) {
-	for (int i = 0; i < mats.size(); i++) {
-		if (mats[i].name == std::string_view(mat)) return i;
-	}
-	mats.emplace_back(mat, FindMaterial(mat));
+	for (int i = 0; i < mats.size(); i++)
+		if (mats[i].name == std::string_view(mat))
+			return i;
+	mats.emplace_back(CachedMat{mat, FindMaterial(mat)});
 	return mats.size() - 1;
 }
 
-template<>
+template <>
 CachedMat read_be(std::istream& s) {
 	std::string name = read_be<std::string>(s);
-	return { name, FindMaterial(name.c_str()) };
+	return {name, FindMaterial(name.c_str())};
 }
-template<>
+template <>
 void write_be(std::ostream& s, const CachedMat& val) {
 	write_be<std::string>(s, val.name);
 }

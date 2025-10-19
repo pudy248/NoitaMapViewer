@@ -9,11 +9,14 @@ find_package(PNG REQUIRED)
 include_directories(.)
 
 add_executable(NoitaMapViewer
+        aes.h
+        aes.cpp
+        fastlz.h
+        fastlz.c
         binops.h
+        biomes.h
         chunks.h
         edit.h
-        fastlz.c
-        fastlz.h
         file_access.h
         materials.h
         png_petri.h

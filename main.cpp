@@ -1,12 +1,13 @@
 #define _CRT_SECURE_NO_WARNINGS
-#include <filesystem>
 #include <SFML/Graphics.hpp>
+#include <filesystem>
 
+#include "biomes.h"
+#include "chunks.h"
+#include "edit.h"
 #include "materials.h"
 #include "png_petri.h"
 #include "streaminfo.h"
-#include "chunks.h"
-#include "edit.h"
 
 sf::Vector2f viewportCenter(512, 512);
 float zoomLevel = 1;
@@ -44,6 +45,10 @@ int main(int argc, char** argv) {
 	auto streaminfo_bgs = ParseStreaminfo((save00_path / "world/.stream_info").string().c_str());
 	auto pixelscene_bgs = ParsePixelScenes(pixelscene_path.string().c_str());
 	LoadMats((current / "data/mats/").string().c_str());
+
+	auto biomes = LoadBiomes();
+	auto biome_map = LoadBiomeMap(biomes);
+
 	auto chunks = LoadPngPetris((save00_path / "world/").string().c_str());
 
 	sf::Font font = sf::Font();
@@ -162,7 +167,7 @@ int main(int argc, char** argv) {
 						PixelSceneBackground* b = pixelscene_bgs.pending[i];
 						std::string str = b->bg.size() ? b->bg : b->mat;
 						if (!str.starts_with("data/biome_impl/spliced") &&
-								pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
+							pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
 							pixelscene_bgs.pending.erase(pixelscene_bgs.pending.begin() + i);
 							--i;
 						}
@@ -171,7 +176,7 @@ int main(int argc, char** argv) {
 						PixelSceneBackground* b = pixelscene_bgs.placed[i];
 						std::string str = b->bg.size() ? b->bg : b->mat;
 						if (!str.starts_with("data/biome_impl/spliced") &&
-								pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
+							pixelscene_bgs.reference_whitelist.find(str) == -1ull) {
 							pixelscene_bgs.placed.erase(pixelscene_bgs.placed.begin() + i);
 							--i;
 						}
@@ -279,6 +284,22 @@ int main(int argc, char** argv) {
 
 		sf::Vector2f screenSize = sf::Vector2f(window.getSize());
 		sf::Vector2f topLeftOffset = screenSize * 0.5f;
+		for (Chunk* chunk : chunks) {
+			auto mod = [](int x, int m) { return (x % m + m) % m; };
+			if (chunk->cy < 0 ||
+				!biome_map.entries[mod(chunk->cy + 14, biome_map.h) * biome_map.w + mod(chunk->cx + 35, biome_map.w)])
+				continue;
+			Biome* b =
+				biome_map.entries[mod(chunk->cy + 14, biome_map.h) * biome_map.w + mod(chunk->cx + 35, biome_map.w)];
+			if (!b->tex)
+				continue;
+			sf::Sprite bg(*b->tex);
+			bg.setTextureRect({0, 0, 512, 512});
+			bg.setScale(zoomLevel, zoomLevel);
+			bg.setPosition((chunk->cx * 512 - viewportCenter.x) * zoomLevel + topLeftOffset.x,
+				(chunk->cy * 512 - viewportCenter.y) * zoomLevel + topLeftOffset.y);
+			window.draw(bg);
+		}
 		for (StreaminfoBackground* bg : streaminfo_bgs) {
 			sf::Sprite s;
 			s.setTexture(bg->tex);
@@ -339,7 +360,7 @@ int main(int argc, char** argv) {
 				matIdx = chunk->data_buffer[512 * cOff.y + cOff.x] & 0x7f;
 
 			char tooltipText[255];
-			sprintf(tooltipText, "(%i, %i)\n%s", (int)gPos.x, (int)gPos.y,
+			sprintf(tooltipText, "(%i, %i)\n%s", (int)cPos.x + 35, (int)cPos.y + 14,
 				matIdx >= 0 ? chunk->mat_names[matIdx].name.c_str() : "");
 			sf::Text text = sf::Text(sf::String((const char*)tooltipText), font);
 			text.setPosition(sf::Vector2f(sf::Mouse::getPosition(window)) + sf::Vector2f(10, 2));

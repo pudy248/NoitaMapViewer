@@ -1,15 +1,14 @@
 #pragma once
 #include "binops.h"
 #include "file_access.h"
+#include "materials.h"
 #include "streaminfo.h"
-#include "wak.h"
 #include <SFML/Graphics.hpp>
 #include <cmath>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <vector>
-
-#include "materials.h"
 
 constexpr float degrees_in_radians = 57.2957795131f;
 
@@ -88,9 +87,8 @@ void write_be<PhysicsObject>(std::ostream& s, const PhysicsObject& val) {
 	write_be<std::uint32_t>(s, val.height);
 
 	auto image_size = val.width * val.height;
-	for (int j = 0; j < image_size; ++j) {
+	for (int j = 0; j < image_size; ++j)
 		write_be<std::uint32_t>(s, val.colors[j]);
-	}
 }
 
 struct Chunk {
@@ -148,12 +146,11 @@ Chunk ParseChunkData(const char* path) {
 	std::vector<std::uint32_t> custom_world_colors = read_vec_be<std::uint32_t>(data);
 
 	int ccIt = 0;
-	for (int i = 0; i < 512 * 512; i++) {
+	for (int i = 0; i < 512 * 512; i++)
 		if (materials[i] & 0x80)
 			customColors[i] = custom_world_colors[ccIt++];
 		else
 			customColors[i] = 0;
-	}
 
 	c.phys_objs = read_vec_be<PhysicsObject>(data);
 
@@ -183,10 +180,9 @@ void SaveChunk(Chunk& c) {
 		if (materials[i] & 0x80)
 			count++;
 	write_be<std::uint32_t>(s, count);
-	for (int i = 0; i < 512 * 512; i++) {
+	for (int i = 0; i < 512 * 512; i++)
 		if (materials[i] & 0x80)
 			write_be<std::uint32_t>(s, customColors[i]);
-	}
 
 	write_vec_be<PhysicsObject>(s, c.phys_objs);
 	for (auto b : c.unhandled_bytes)
@@ -304,7 +300,7 @@ void ChunkSet(Chunk& c, int x, int y, const char* material, uint32_t color = 0) 
 
 void DestroyChunk(Chunk& c, PixelScenes& scenes, const char* save00_path) {
 	remove(c.cpath.c_str());
-	char buffer[MAX_PATH];
+	char buffer[260];
 	sprintf(buffer, "%s/world/area_%i.bin", save00_path, c.cy * 2000 + c.cx);
 	remove(buffer);
 	sprintf(buffer, "%s/world/entities_%i.bin", save00_path, c.cy * 2000 + c.cx);
@@ -321,4 +317,3 @@ void DestroyChunk(Chunk& c, PixelScenes& scenes, const char* save00_path) {
 		}
 	}
 }
-

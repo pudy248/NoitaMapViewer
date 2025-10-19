@@ -1,7 +1,8 @@
 #pragma once
 #include <filesystem>
-#include <string_view>
+#include <iostream>
 #include <string>
+#include <string_view>
 
 #ifdef WIN32
 #include "Windows.h"
@@ -27,12 +28,13 @@ std::string locate_file_dialog(const char* hint, const char* filter, const char*
 	// yep, it's terrible. Linux people, make this better if possible maybe
 	std::string s;
 	printf("%s\n", title);
-	s << std::cin;
+	std::getline(std::cin, s);
 	return s;
 #endif
 }
 
-template <typename F> void for_each_file(std::filesystem::path directory, const char* ext, bool recursive, F what) {
+template <typename F>
+void for_each_file(std::filesystem::path directory, const char* ext, bool recursive, F what) {
 	/*
 	char buffer[2048];
 	WCHAR wSearchName[2048];
@@ -61,15 +63,13 @@ template <typename F> void for_each_file(std::filesystem::path directory, const 
 		abort();
 	}*/
 	try {
-	for (auto p : std::filesystem::directory_iterator(directory)) {
-		if (p.is_directory()) {
-			if (recursive)
-				for_each_file(p, ext, recursive, what);
+		for (auto p : std::filesystem::directory_iterator(directory)) {
+			if (p.is_directory()) {
+				if (recursive)
+					for_each_file(p, ext, recursive, what);
+			} else if (p.path().extension().string() == std::string_view(ext))
+				what(p.path());
 		}
-		else if (p.path().extension().string() == std::string_view(ext))
-			what(p.path());
-		
-	}
 	} catch (std::filesystem::filesystem_error e) {
 		printf("%s\n", e.what());
 		exit(-1);
